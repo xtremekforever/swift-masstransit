@@ -17,7 +17,9 @@ public struct MassTransit: Sendable {
         self.logger = logger
     }
 
-    func publish<T: Codable>(_ value: T, exchangeName: String = "\(T.self)", routingKey: String = "") async throws {
+    public func publish<T: Codable>(_ value: T, exchangeName: String = "\(T.self)", routingKey: String = "")
+        async throws
+    {
         let connection = try await waitForConnection()
         let publisher = Publisher(
             connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
@@ -49,7 +51,7 @@ public struct MassTransit: Sendable {
         }
     }
 
-    func consume<T: Codable>(
+    public func consume<T: Codable>(
         _: T.Type, queueName: String = "\(T.self)-Consumer", exchangeName: String = "\(T.self)", routingKey: String = ""
     )
         async throws -> AnyAsyncSequence<T>
