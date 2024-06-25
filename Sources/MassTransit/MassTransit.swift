@@ -9,7 +9,7 @@ public struct MassTransit: Sendable {
     private let rabbitMq: RabbitMq.Connectable
     private let logger: Logger
 
-    init(
+    public init(
         _ rabbitMq: RabbitMq.Connectable,
         logger: Logger = Logger(label: "\(MassTransit.self)")
     ) {
