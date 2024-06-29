@@ -20,7 +20,7 @@ public struct MassTransit: Sendable {
     public func publish<T: Codable>(_ value: T, exchangeName: String = "\(T.self)", routingKey: String = "")
         async throws
     {
-        let connection = try await waitForConnection()
+        let connection = try await rabbitMq.waitForConnection()
         let publisher = Publisher(
             connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
         )
@@ -56,11 +56,12 @@ public struct MassTransit: Sendable {
     )
         async throws -> AnyAsyncSequence<T>
     {
-        let connection = try await waitForConnection()
+        let connection = try await rabbitMq.waitForConnection()
         let consumer = Consumer(
             connection, queueName, exchangeName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
-            queueOptions: QueueOptions(autoDelete: true, durable: true)
+            queueOptions: QueueOptions(autoDelete: true, durable: true),
+            consumerOptions: ConsumerOptions(noAck: true)
         )
 
         // Consume messages with span tracing
@@ -81,30 +82,5 @@ public struct MassTransit: Sendable {
                 }
             }
         )
-    }
-
-    private func calculateTimeDifference(between now: DispatchTime, and start: DispatchTime) -> Double {
-        if now < start {
-            return 0.0
-        }
-        return Double(now.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
-    }
-
-    private func waitForConnection(timeout: Int = 30) async throws -> Connection {
-        let start = DispatchTime.now()
-        while !Task.isCancelled {
-            if let connection = await rabbitMq.getConnection() {
-                return connection
-            }
-
-            let elapsed = calculateTimeDifference(between: DispatchTime.now(), and: start)
-            if elapsed > Double(timeout) {
-                throw MassTransitError.brokerTimeout
-            } else {
-                try await Task.sleep(for: .milliseconds(10))
-            }
-        }
-
-        throw CancellationError()
     }
 }

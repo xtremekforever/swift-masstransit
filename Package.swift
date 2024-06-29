@@ -15,7 +15,7 @@ let package = Package(
             targets: ["MassTransit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "main"),
+        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "feature/1-connection-recovery"),
         .package(url: "https://github.com/apple/swift-distributed-tracing-extras.git", from: "1.0.0-beta.1"),
 
     ],
