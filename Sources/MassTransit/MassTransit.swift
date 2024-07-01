@@ -47,7 +47,7 @@ public struct MassTransit: Sendable {
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
             span.attributes.messaging.system = "rabbitmq"
-            try await publisher.publish(messageJson, routingKey: routingKey)
+            try await publisher.retryingPublish(messageJson, routingKey: routingKey)
         }
     }
 
@@ -67,7 +67,7 @@ public struct MassTransit: Sendable {
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
         return AnyAsyncSequence<T>(
-            try await consumer.consume().compactMap { message in
+            try await consumer.retryingConsume().compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     // Decode from JSON
                     let decoder = JSONDecoder()
