@@ -1,0 +1,28 @@
+{
+    "configurations": [
+        {
+            "type": "lldb",
+            "request": "launch",
+            "sourceLanguages": [
+                "swift"
+            ],
+            "args": [],
+            "cwd": "${workspaceFolder:swift-masstransit}",
+            "name": "Debug PublishConsume",
+            "program": "${workspaceFolder:swift-masstransit}/.build/debug/PublishConsume",
+            "preLaunchTask": "swift: Build Debug PublishConsume"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "sourceLanguages": [
+                "swift"
+            ],
+            "args": [],
+            "cwd": "${workspaceFolder:swift-masstransit}",
+            "name": "Release PublishConsume",
+            "program": "${workspaceFolder:swift-masstransit}/.build/release/PublishConsume",
+            "preLaunchTask": "swift: Build Release PublishConsume"
+        }
+    ]
+}

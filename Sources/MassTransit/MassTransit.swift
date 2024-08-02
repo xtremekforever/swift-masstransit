@@ -17,10 +17,15 @@ public struct MassTransit: Sendable {
         self.logger = logger
     }
 
-    public func publish<T: Codable>(_ value: T, exchangeName: String = "\(T.self)", routingKey: String = "")
+    public func publish<T: Codable>(
+        _ value: T,
+        exchangeName: String = "\(T.self)",
+        routingKey: String = "",
+        timeout: Duration = .seconds(30)
+    )
         async throws
     {
-        let connection = try await waitForConnection()
+        let connection = try await rabbitMq.waitGetConnection()
         let publisher = Publisher(
             connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
         )
@@ -47,26 +52,32 @@ public struct MassTransit: Sendable {
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
             span.attributes.messaging.system = "rabbitmq"
-            try await publisher.publish(messageJson, routingKey: routingKey)
+            try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: timeout)
+            logger.debug("Published message \(value) to exchange \(exchangeName)")
         }
     }
 
     public func consume<T: Codable>(
-        _: T.Type, queueName: String = "\(T.self)-Consumer", exchangeName: String = "\(T.self)", routingKey: String = ""
+        _: T.Type,
+        queueName: String = "\(T.self)-Consumer",
+        exchangeName: String = "\(T.self)",
+        routingKey: String = "",
+        timeout: Duration = .seconds(30)
     )
         async throws -> AnyAsyncSequence<T>
     {
-        let connection = try await waitForConnection()
+        let connection = try await rabbitMq.waitGetConnection()
         let consumer = Consumer(
             connection, queueName, exchangeName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
-            queueOptions: QueueOptions(autoDelete: true, durable: true)
+            queueOptions: QueueOptions(autoDelete: true, durable: true),
+            consumerOptions: ConsumerOptions(noAck: true)
         )
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
         return AnyAsyncSequence<T>(
-            try await consumer.consume().compactMap { message in
+            try await consumer.retryingConsume(retryInterval: timeout).compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     // Decode from JSON
                     let decoder = JSONDecoder()
@@ -76,35 +87,12 @@ public struct MassTransit: Sendable {
                         throw MassTransitError.parsingError
                     }
 
+                    logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+
                     // Return the message
                     return wrapper.message
                 }
             }
         )
-    }
-
-    private func calculateTimeDifference(between now: DispatchTime, and start: DispatchTime) -> Double {
-        if now < start {
-            return 0.0
-        }
-        return Double(now.uptimeNanoseconds - start.uptimeNanoseconds) / 1_000_000_000
-    }
-
-    private func waitForConnection(timeout: Int = 30) async throws -> Connection {
-        let start = DispatchTime.now()
-        while !Task.isCancelled {
-            if let connection = await rabbitMq.getConnection() {
-                return connection
-            }
-
-            let elapsed = calculateTimeDifference(between: DispatchTime.now(), and: start)
-            if elapsed > Double(timeout) {
-                throw MassTransitError.brokerTimeout
-            } else {
-                try await Task.sleep(for: .milliseconds(10))
-            }
-        }
-
-        throw CancellationError()
     }
 }

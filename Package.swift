@@ -28,7 +28,14 @@ let package = Package(
                 .product(name: "RabbitMq", package: "swift-rabbitmq"),
                 .product(name: "TracingOpenTelemetrySemanticConventions", package: "swift-distributed-tracing-extras"),
             ]
-        )
+        ),
+        .executableTarget(
+            name: "PublishConsume",
+            dependencies: [
+                "MassTransit"
+            ],
+            path: "Sources/Examples/PublishConsume"
+        ),
     ]
 )
 
