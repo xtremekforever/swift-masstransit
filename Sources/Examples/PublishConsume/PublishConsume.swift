@@ -20,17 +20,17 @@ struct RabbitMqConnector: Connectable {
     }
 }
 
-struct MyTestEvent: Codable {
+struct MyTestEvent: MassTransitMessage {
     let id: UUID
     let name: String
 }
 
 let logger = Logger(label: "PublishConsume")
-let rabbitMqConnector = try RabbitMqConnector("amqp://guest:guest@localhost/%2F")
-let massTransit = MassTransit(rabbitMqConnector, logger: logger)
+let connector = try RabbitMqConnector("amqp://guest:guest@localhost/%2F")
+let massTransit = MassTransit(connector, logger: logger)
 
 let connectTask = Task {
-    try await rabbitMqConnector.run()
+    try await connector.run()
 }
 let consumeTask = Task {
     let events = try await massTransit.consume(MyTestEvent.self)

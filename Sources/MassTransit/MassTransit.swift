@@ -17,7 +17,7 @@ public struct MassTransit: Sendable {
         self.logger = logger
     }
 
-    public func publish<T: Codable>(
+    public func publish<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = "\(T.self)",
         routingKey: String = "",
@@ -52,7 +52,7 @@ public struct MassTransit: Sendable {
         }
     }
 
-    public func consume<T: Codable>(
+    public func consume<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(T.self)-Consumer",
         exchangeName: String = "\(T.self)",

@@ -1,6 +1,8 @@
 import Foundation
 
-struct MassTransitWrapper<Message: Codable>: Codable {
+public typealias MassTransitMessage = Codable & Sendable
+
+struct MassTransitWrapper<Message: MassTransitMessage>: MassTransitMessage {
     var messageId: String
     var requestId: String?
     var sourceAddress: String?
