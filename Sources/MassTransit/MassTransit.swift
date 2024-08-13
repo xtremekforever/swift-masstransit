@@ -5,6 +5,8 @@ import RabbitMq
 import Tracing
 import TracingOpenTelemetrySemanticConventions
 
+public let MassTransitDefaultTimeout: Duration = Duration.seconds(30)
+
 public struct MassTransit: Sendable {
     private let rabbitMq: RabbitMq.Connectable
     private let logger: Logger
@@ -21,7 +23,7 @@ public struct MassTransit: Sendable {
         _ value: T,
         exchangeName: String = "\(T.self)",
         routingKey: String = "",
-        timeout: Duration = .seconds(30)
+        timeout: Duration = MassTransitDefaultTimeout
     )
         async throws
     {
@@ -57,7 +59,7 @@ public struct MassTransit: Sendable {
         queueName: String = "\(T.self)-Consumer",
         exchangeName: String = "\(T.self)",
         routingKey: String = "",
-        timeout: Duration = .seconds(30)
+        timeout: Duration = MassTransitDefaultTimeout
     )
         async throws -> AnyAsyncSequence<T>
     {
@@ -84,5 +86,85 @@ public struct MassTransit: Sendable {
                 }
             }
         )
+    }
+
+    public func request<T: MassTransitMessage, TResponse: MassTransitMessage>(
+        _ value: T,
+        _: TResponse.Type,
+        exchangeName: String = "\(T.self)",
+        routingKey: String = "",
+        timeout: Duration = MassTransitDefaultTimeout
+    ) async throws -> TResponse {
+        // Use task group to timeout request
+        return try await withThrowingTaskGroup(of: TResponse.self) { group in
+            group.addTask {
+                return try await performRequest(value, TResponse.self, exchangeName, routingKey)
+            }
+            group.addTask {
+                try await gracefulCancellableDelay(timeout: timeout)
+                throw MassTransitError.timeout
+            }
+
+            let result = try await group.next()
+            group.cancelAll()
+            return result!
+        }
+    }
+
+    private func performRequest<T: MassTransitMessage, TResponse: MassTransitMessage>(
+        _ value: T,
+        _: TResponse.Type,
+        _ exchangeName: String = "\(T.self)",
+        _ routingKey: String = ""
+    ) async throws -> TResponse {
+        let connection = try await rabbitMq.waitGetConnection()
+
+        // Publisher is used to send the request
+        let publisher: Publisher = Publisher(
+            connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+        )
+
+        // Consumer is used to get a response with a custom requestName and address provided
+        let requestName = "\(ProcessInfo.processInfo.hostName)_\(getModuleName(self))_bus_\(randomString(length: 26))"
+        let address = "\(await connection.getConnectionAddress())/\(requestName)?temporary=true"
+        let consumer = Consumer(
+            connection, requestName, requestName, routingKey,
+            exchangeOptions: ExchangeOptions(type: .fanout, durable: false, autoDelete: true),
+            queueOptions: QueueOptions(autoDelete: true, durable: false, args: ["x-expires": .int32(60000)]),
+            consumerOptions: ConsumerOptions(noAck: true)
+        )
+
+        // Create MassTransitWrapper to send the request
+        let request = MassTransitWrapper(
+            messageId: UUID().uuidString,
+            requestId: UUID().uuidString,
+            sourceAddress: address,
+            responseAddress: address,
+            messageType: ["urn:message:\(exchangeName)"],
+            message: value
+        )
+
+        // Start consuming before publishing request so we can get the response
+        let responseStream = try await consumer.consume()
+
+        // Send the request with a regular publish
+        logger.info("Sending request of type \(T.self) to exchange \(exchangeName)...")
+        let requestJson = try request.jsonEncode()
+        try await withSpan("\(T.self) request", ofKind: .producer) { span in
+            span.attributes.messaging.messageID = request.messageId
+            span.attributes.messaging.destination = exchangeName
+            span.attributes.messaging.rabbitMQ.routingKey = routingKey
+            span.attributes.messaging.system = "rabbitmq"
+            try await publisher.publish(requestJson, routingKey: routingKey)
+            logger.debug("Sent request \(value) to exchange \(exchangeName)")
+        }
+
+        logger.debug("Waiting for response of type \(TResponse.self) on queue \(requestName)...")
+        for await responseJson in responseStream {
+            let response = try MassTransitWrapper(TResponse.self, from: responseJson)
+            logger.debug("Received response \(response.message) from queue \(requestName)")
+            return response.message
+        }
+        throw MassTransitError.timeout
     }
 }

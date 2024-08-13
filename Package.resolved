@@ -3,10 +3,10 @@
     {
       "identity" : "rabbitmq-nio",
       "kind" : "remoteSourceControl",
-      "location" : "https://github.com/xtremekforever/rabbitmq-nio",
+      "location" : "https://github.com/funcmike/rabbitmq-nio",
       "state" : {
-        "branch" : "bugfix/46-double-slash-vhost",
-        "revision" : "7b5c384e5175b009775074392a90e42131c1da73"
+        "branch" : "main",
+        "revision" : "315471ce99d85077ea4a136c2519d3ed81d277d1"
       }
     },
     {
@@ -87,7 +87,7 @@
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
         "branch" : "main",
-        "revision" : "00588f2248a464572598898ece518a47d3d4f7b7"
+        "revision" : "7e43e233d956aea4d46f6a3190ff0a3c2b6aaa71"
       }
     },
     {

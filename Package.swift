@@ -36,6 +36,13 @@ let package = Package(
             ],
             path: "Sources/Examples/PublishConsume"
         ),
+        .executableTarget(
+            name: "RequestResponse",
+            dependencies: [
+                "MassTransit"
+            ],
+            path: "Sources/Examples/RequestResponse"
+        ),
     ]
 )
 

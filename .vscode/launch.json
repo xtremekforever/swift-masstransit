@@ -23,6 +23,30 @@
             "name": "Release PublishConsume",
             "program": "${workspaceFolder:swift-masstransit}/.build/release/PublishConsume",
             "preLaunchTask": "swift: Build Release PublishConsume"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "sourceLanguages": [
+                "swift"
+            ],
+            "args": [],
+            "cwd": "${workspaceFolder:swift-masstransit}",
+            "name": "Debug RequestResponse",
+            "program": "${workspaceFolder:swift-masstransit}/.build/debug/RequestResponse",
+            "preLaunchTask": "swift: Build Debug RequestResponse"
+        },
+        {
+            "type": "lldb",
+            "request": "launch",
+            "sourceLanguages": [
+                "swift"
+            ],
+            "args": [],
+            "cwd": "${workspaceFolder:swift-masstransit}",
+            "name": "Release RequestResponse",
+            "program": "${workspaceFolder:swift-masstransit}/.build/release/RequestResponse",
+            "preLaunchTask": "swift: Build Release RequestResponse"
         }
     ]
 }
