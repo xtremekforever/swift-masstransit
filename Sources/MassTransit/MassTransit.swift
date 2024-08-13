@@ -38,12 +38,7 @@ public struct MassTransit: Sendable {
         )
 
         // Encode to JSON
-        let encoder = JSONEncoder()
-        guard let json = try? encoder.encode(wrapper),
-            let messageJson = String(data: json, encoding: .utf8)
-        else {
-            throw MassTransitError.parsingError
-        }
+        let messageJson = try wrapper.jsonEncode()
 
         // Publish message with span processor
         logger.info("Publishing message of type \(T.self) on exchange \(exchangeName)...")
@@ -79,14 +74,9 @@ public struct MassTransit: Sendable {
         return AnyAsyncSequence<T>(
             try await consumer.retryingConsume(retryInterval: timeout).compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    // Decode from JSON
-                    let decoder = JSONDecoder()
-                    guard let data = message.data(using: .utf8),
-                        let wrapper = try? decoder.decode(MassTransitWrapper<T>.self, from: data)
-                    else {
-                        throw MassTransitError.parsingError
-                    }
+                    let wrapper = try MassTransitWrapper(T.self, from: message)
 
+                    // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
 
                     // Return the message
