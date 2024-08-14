@@ -88,6 +88,45 @@ public struct MassTransit: Sendable {
         )
     }
 
+    public func consumeWithContext<T: MassTransitMessage>(
+        _: T.Type,
+        queueName: String = "\(T.self)-Consumer",
+        exchangeName: String = "\(T.self)",
+        routingKey: String = "",
+        timeout: Duration = MassTransitDefaultTimeout
+    )
+        async throws -> AnyAsyncSequence<RequestContext<T>>
+    {
+        let connection = try await rabbitMq.waitGetConnection()
+        let consumer = Consumer(
+            connection, queueName, exchangeName, routingKey,
+            exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
+            queueOptions: QueueOptions(autoDelete: true, durable: true),
+            consumerOptions: ConsumerOptions(noAck: true)
+        )
+
+        // Consume messages with span tracing
+        logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
+        return AnyAsyncSequence<RequestContext<T>>(
+            try await consumer.retryingConsume(retryInterval: timeout).compactMap { message in
+                return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
+                    let wrapper = try MassTransitWrapper(T.self, from: message)
+
+                    // Log!
+                    logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+
+                    // Create ConsumeContext from message
+                    return RequestContext(
+                        connection: connection,
+                        requestId: wrapper.requestId,
+                        responseAddress: wrapper.responseAddress,
+                        message: wrapper.message
+                    )
+                }
+            }
+        )
+    }
+
     public func request<T: MassTransitMessage, TResponse: MassTransitMessage>(
         _ value: T,
         _: TResponse.Type,

@@ -2,18 +2,18 @@ import Foundation
 
 public typealias MassTransitMessage = Codable & Sendable
 
-struct MassTransitWrapper<Message: MassTransitMessage>: MassTransitMessage {
+struct MassTransitWrapper<T: MassTransitMessage>: MassTransitMessage {
     var messageId: String
     var requestId: String?
     var sourceAddress: String?
     var destinationAddress: String?
     var responseAddress: String?
     var messageType: [String]
-    var message: Message
+    var message: T
 }
 
 extension MassTransitWrapper {
-    init(_: Message.Type, from jsonString: String) throws {
+    init(_: T.Type, from jsonString: String) throws {
         // Decode from JSON
         let decoder = JSONDecoder()
         guard let data = jsonString.data(using: .utf8),

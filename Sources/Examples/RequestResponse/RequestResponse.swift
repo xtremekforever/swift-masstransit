@@ -12,7 +12,7 @@ struct MyResponse: MassTransitMessage {
 }
 
 var logger = Logger(label: "RequestResponse")
-logger.logLevel = .debug
+//logger.logLevel = .debug
 let rabbitMq = try SimpleRabbitMqConnector("amqp://guest:guest@localhost/%2F", logger: logger)
 let massTransit = MassTransit(rabbitMq, logger: logger)
 
@@ -22,17 +22,31 @@ try await withThrowingDiscardingTaskGroup { group in
         try await rabbitMq.run()
     }
 
-    for await _ in AsyncTimerSequence(interval: .seconds(1), clock: .continuous) {
-        do {
-            let response = try await massTransit.request(
-                MyRequest(value: "please give me something"), MyResponse.self,
-                exchangeName: "masstransit_request_response.Contracts:MyRequest",
-                timeout: .seconds(15))
-            logger.info("Got response: \(response)")
-        } catch {
-            logger.error("Request failed: \(error)")
+    // This will request on an interval
+    group.addTask {
+        for await _ in AsyncTimerSequence(interval: .seconds(1), clock: .continuous) {
+            do {
+                let response = try await massTransit.request(
+                    MyRequest(value: "please give me something"), MyResponse.self,
+                    timeout: .seconds(15))
+                await logger.info("Got response: \(response)")
+            } catch {
+                await logger.error("Request failed: \(error)")
+            }
         }
     }
 
-    group.cancelAll()
+    // This will respond to requests
+    group.addTask {
+        let requestStream = try await massTransit.consumeWithContext(
+            MyRequest.self, queueName: "RequestResponse-MyRequestConsumer")
+        for await request in requestStream {
+            let message = request.message
+            await logger.info("Got request: \(message)")
+
+            let response = MyResponse(value: message.value)
+            await logger.info("Sending response: \(response)")
+            try await request.respond(response)
+        }
+    }
 }
