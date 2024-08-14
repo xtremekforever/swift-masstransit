@@ -16,7 +16,7 @@ extension RequestContext {
         _ value: TResponse,
         messageType: String = "\(TResponse.self)",
         routingKey: String = "",
-        timeout: Duration = MassTransitDefaultTimeout
+        retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws {
         guard let responseAddress = responseAddress,
             let responseUrl = URL(string: responseAddress),
@@ -48,7 +48,7 @@ extension RequestContext {
             span.attributes.messaging.destination = responseExchange
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
             span.attributes.messaging.system = "rabbitmq"
-            try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: timeout)
+            try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
         }
     }
 }

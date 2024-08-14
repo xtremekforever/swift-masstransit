@@ -5,7 +5,8 @@ import RabbitMq
 import Tracing
 import TracingOpenTelemetrySemanticConventions
 
-public let MassTransitDefaultTimeout: Duration = Duration.seconds(30)
+public let MassTransitDefaultRetryInterval = Duration.seconds(30)
+public let MassTransitDefaultTimeout = Duration.seconds(30)
 
 public struct MassTransit: Sendable {
     private let rabbitMq: RabbitMq.Connectable
@@ -23,7 +24,7 @@ public struct MassTransit: Sendable {
         _ value: T,
         exchangeName: String = "\(T.self)",
         routingKey: String = "",
-        timeout: Duration = MassTransitDefaultTimeout
+        retryInterval: Duration = MassTransitDefaultRetryInterval
     )
         async throws
     {
@@ -49,7 +50,7 @@ public struct MassTransit: Sendable {
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
             span.attributes.messaging.system = "rabbitmq"
-            try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: timeout)
+            try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
             logger.debug("Published message \(value) to exchange \(exchangeName)")
         }
     }
@@ -59,7 +60,7 @@ public struct MassTransit: Sendable {
         queueName: String = "\(T.self)-Consumer",
         exchangeName: String = "\(T.self)",
         routingKey: String = "",
-        timeout: Duration = MassTransitDefaultTimeout
+        retryInterval: Duration = MassTransitDefaultRetryInterval
     )
         async throws -> AnyAsyncSequence<T>
     {
@@ -74,7 +75,7 @@ public struct MassTransit: Sendable {
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
         return AnyAsyncSequence<T>(
-            try await consumer.retryingConsume(retryInterval: timeout).compactMap { message in
+            try await consumer.retryingConsume(retryInterval: retryInterval).compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: message)
 
@@ -93,7 +94,7 @@ public struct MassTransit: Sendable {
         queueName: String = "\(T.self)-Consumer",
         exchangeName: String = "\(T.self)",
         routingKey: String = "",
-        timeout: Duration = MassTransitDefaultTimeout
+        retryInterval: Duration = MassTransitDefaultRetryInterval
     )
         async throws -> AnyAsyncSequence<RequestContext<T>>
     {
@@ -108,7 +109,7 @@ public struct MassTransit: Sendable {
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
         return AnyAsyncSequence<RequestContext<T>>(
-            try await consumer.retryingConsume(retryInterval: timeout).compactMap { message in
+            try await consumer.retryingConsume(retryInterval: retryInterval).compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: message)
 
