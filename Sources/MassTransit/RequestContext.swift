@@ -13,7 +13,7 @@ public struct RequestContext<T: MassTransitMessage>: Sendable {
 extension RequestContext {
     public func respond<TResponse: MassTransitMessage>(
         _ value: TResponse,
-        messageType: String = "\(TResponse.self)",
+        exchangeName: String = "\(TResponse.self)",
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws {
@@ -29,7 +29,7 @@ extension RequestContext {
             messageId: UUID().uuidString,
             requestId: requestId,
             destinationAddress: responseAddress,
-            messageType: ["urn:message:\(messageType)"],
+            messageType: ["urn:message:\(exchangeName)"],
             message: value
         )
 
