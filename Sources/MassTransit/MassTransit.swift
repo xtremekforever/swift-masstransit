@@ -141,7 +141,7 @@ public struct MassTransit: Sendable {
                 return try await performRequest(value, TResponse.self, exchangeName, routingKey)
             }
             group.addTask {
-                try await gracefulCancellableDelay(timeout: timeout)
+                await gracefulCancellableDelay(timeout: timeout)
                 throw MassTransitError.timeout
             }
 

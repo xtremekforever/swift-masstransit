@@ -12,7 +12,7 @@ struct MyResponse: MassTransitMessage {
 }
 
 var logger = Logger(label: "RequestResponse")
-//logger.logLevel = .debug
+logger.logLevel = .debug
 let rabbitMq = try SimpleRabbitMqConnector("amqp://guest:guest@localhost/%2F", logger: logger)
 let massTransit = MassTransit(rabbitMq, logger: logger)
 
@@ -40,6 +40,7 @@ try await withThrowingDiscardingTaskGroup { group in
     group.addTask {
         let requestStream = try await massTransit.consumeWithContext(
             MyRequest.self, queueName: "RequestResponse-MyRequestConsumer")
+
         for await request in requestStream {
             let message = request.message
             await logger.info("Got request: \(message)")
