@@ -20,6 +20,34 @@ public struct MassTransit: Sendable {
         self.logger = logger
     }
 
+    public func send<T: MassTransitMessage>(
+        _ value: T,
+        exchangeName: String = "\(T.self)",
+        routingKey: String = ""
+    ) async throws {
+        let connection = try await rabbitMq.waitGetConnection()
+        let publisher = Publisher(
+            connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+        )
+
+        // Create MassTransitWrapper to send the message
+        let wrapper = MassTransitWrapper<T>.create(from: value, using: exchangeName)
+
+        // Encode to JSON
+        let messageJson = try wrapper.jsonEncode()
+
+        // Publish message with span processor
+        logger.debug("Sending message of type \(T.self) on exchange \(exchangeName)...")
+        try await withSpan("\(T.self) send", ofKind: .producer) { span in
+            span.attributes.messaging.messageID = wrapper.messageId
+            span.attributes.messaging.destination = exchangeName
+            span.attributes.messaging.rabbitMQ.routingKey = routingKey
+            span.attributes.messaging.system = "rabbitmq"
+            try await publisher.publish(messageJson, routingKey: routingKey)
+            logger.debug("Sent message \(value) to exchange \(exchangeName)")
+        }
+    }
+
     public func publish<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = "\(T.self)",
@@ -34,11 +62,7 @@ public struct MassTransit: Sendable {
         )
 
         // Create MassTransitWrapper to send the message
-        let wrapper = MassTransitWrapper(
-            messageId: UUID().uuidString,
-            messageType: ["urn:message:\(exchangeName)"],
-            message: value
-        )
+        let wrapper = MassTransitWrapper<T>.create(from: value, using: exchangeName)
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
@@ -175,14 +199,10 @@ public struct MassTransit: Sendable {
         )
 
         // Create MassTransitWrapper to send the request
-        let request = MassTransitWrapper(
-            messageId: UUID().uuidString,
-            requestId: UUID().uuidString,
-            sourceAddress: address,
-            responseAddress: address,
-            messageType: ["urn:message:\(exchangeName)"],
-            message: value
-        )
+        var request = MassTransitWrapper<T>.create(from: value, using: exchangeName)
+        request.requestId = UUID().uuidString
+        request.sourceAddress = address
+        request.responseAddress = address
 
         // Start consuming before publishing request so we can get the response
         let responseStream = try await consumer.consume()

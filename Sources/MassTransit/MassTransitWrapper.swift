@@ -35,4 +35,16 @@ extension MassTransitWrapper {
 
         return jsonString
     }
+
+    static func create<TMessage: MassTransitMessage>(from value: TMessage, using exchangeName: String)
+        -> MassTransitWrapper<
+            TMessage
+        >
+    {
+        return MassTransitWrapper<TMessage>(
+            messageId: UUID().uuidString,
+            messageType: ["urn:message:\(exchangeName)"],
+            message: value
+        )
+    }
 }
