@@ -27,6 +27,7 @@ extension MassTransitWrapper {
     func jsonEncode() throws -> String {
         // Encode to JSON
         let encoder = JSONEncoder()
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         guard let json = try? encoder.encode(self),
             let jsonString = String(data: json, encoding: .utf8)
         else {
