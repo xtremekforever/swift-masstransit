@@ -2,6 +2,7 @@ import AsyncAlgorithms
 import Foundation
 import Logging
 import MassTransit
+import RabbitMq
 
 struct MyTestEvent: MassTransitMessage {
     let id: UUID
@@ -9,7 +10,7 @@ struct MyTestEvent: MassTransitMessage {
 }
 
 let logger = Logger(label: "PublishConsume")
-let rabbitMq = try SimpleRabbitMqConnector("amqp://guest:guest@localhost/%2F", logger: logger)
+let rabbitMq = try RetryingConnection("amqp://guest:guest@localhost/%2F", logger: logger)
 let massTransit = MassTransit(rabbitMq, logger: logger)
 
 try await withThrowingDiscardingTaskGroup { group in

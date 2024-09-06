@@ -2,8 +2,8 @@ import Foundation
 import RabbitMq
 
 extension Connection {
-    func getConnectionAddress() -> String {
-        guard let configuredUrl = URL(string: url),
+    func getConnectionAddress() async -> String {
+        guard let configuredUrl = URL(string: await configuredUrl),
             let scheme = configuredUrl.scheme,
             let host = configuredUrl.host
         else {

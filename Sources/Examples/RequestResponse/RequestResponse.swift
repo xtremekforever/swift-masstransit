@@ -2,6 +2,7 @@ import AsyncAlgorithms
 import Foundation
 import Logging
 import MassTransit
+import RabbitMq
 
 struct MyRequest: MassTransitMessage {
     let value: String
@@ -13,7 +14,7 @@ struct MyResponse: MassTransitMessage {
 
 var logger = Logger(label: "RequestResponse")
 logger.logLevel = .debug
-let rabbitMq = try SimpleRabbitMqConnector("amqp://guest:guest@localhost/%2F", logger: logger)
+let rabbitMq = try RetryingConnection("amqp://guest:guest@localhost/%2F", logger: logger)
 let massTransit = MassTransit(rabbitMq, logger: logger)
 
 try await withThrowingDiscardingTaskGroup { group in
@@ -24,7 +25,7 @@ try await withThrowingDiscardingTaskGroup { group in
 
     // This will request on an interval
     group.addTask {
-        for await _ in AsyncTimerSequence(interval: .seconds(1), clock: .continuous) {
+        for await _ in AsyncTimerSequence(interval: .seconds(1), clock: .continuous).debounce(for: .seconds(1)) {
             do {
                 let response = try await massTransit.request(
                     MyRequest(value: "please give me something"), MyResponse.self,

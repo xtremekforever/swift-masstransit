@@ -9,11 +9,11 @@ public let MassTransitDefaultRetryInterval = Duration.seconds(30)
 public let MassTransitDefaultTimeout = Duration.seconds(30)
 
 public struct MassTransit: Sendable {
-    private let rabbitMq: RabbitMq.Connectable
+    private let rabbitMq: RetryingConnection
     private let logger: Logger
 
     public init(
-        _ rabbitMq: RabbitMq.Connectable,
+        _ rabbitMq: RetryingConnection,
         logger: Logger = Logger(label: "\(MassTransit.self)")
     ) {
         self.rabbitMq = rabbitMq
@@ -25,9 +25,8 @@ public struct MassTransit: Sendable {
         exchangeName: String = "\(T.self)",
         routingKey: String = ""
     ) async throws {
-        let connection = try await rabbitMq.waitGetConnection()
         let publisher = Publisher(
-            connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+            rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
         )
 
         // Create MassTransitWrapper to send the message
@@ -56,9 +55,8 @@ public struct MassTransit: Sendable {
     )
         async throws
     {
-        let connection = try await rabbitMq.waitGetConnection()
         let publisher = Publisher(
-            connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+            rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
         )
 
         // Create MassTransitWrapper to send the message
@@ -88,9 +86,8 @@ public struct MassTransit: Sendable {
     )
         async throws -> AnyAsyncSequence<T>
     {
-        let connection = try await rabbitMq.waitGetConnection()
         let consumer = Consumer(
-            connection, queueName, exchangeName, routingKey,
+            rabbitMq, queueName, exchangeName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
             queueOptions: QueueOptions(autoDelete: true, durable: true),
             consumerOptions: ConsumerOptions(noAck: true)
@@ -122,9 +119,8 @@ public struct MassTransit: Sendable {
     )
         async throws -> AnyAsyncSequence<RequestContext<T>>
     {
-        let connection = try await rabbitMq.waitGetConnection()
         let consumer = Consumer(
-            connection, queueName, exchangeName, routingKey,
+            rabbitMq, queueName, exchangeName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
             queueOptions: QueueOptions(autoDelete: true, durable: true),
             consumerOptions: ConsumerOptions(noAck: true)
@@ -142,7 +138,7 @@ public struct MassTransit: Sendable {
 
                     // Create ConsumeContext from message
                     return RequestContext(
-                        connection: connection,
+                        connection: rabbitMq,
                         requestId: wrapper.requestId,
                         responseAddress: wrapper.responseAddress,
                         message: wrapper.message
@@ -181,18 +177,16 @@ public struct MassTransit: Sendable {
         _ exchangeName: String = "\(T.self)",
         _ routingKey: String = ""
     ) async throws -> TResponse {
-        let connection = try await rabbitMq.waitGetConnection()
-
         // Publisher is used to send the request
         let publisher: Publisher = Publisher(
-            connection, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+            rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
         )
 
         // Consumer is used to get a response with a custom requestName and address provided
         let requestName = "\(ProcessInfo.processInfo.hostName)_\(getModuleName(self))_bus_\(randomString(length: 26))"
-        let address = "\(await connection.getConnectionAddress())/\(requestName)?temporary=true"
+        let address = "\(await rabbitMq.getConnectionAddress())/\(requestName)?temporary=true"
         let consumer = Consumer(
-            connection, requestName, requestName, routingKey,
+            rabbitMq, requestName, requestName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: false, autoDelete: true),
             queueOptions: QueueOptions(autoDelete: true, durable: false, args: ["x-expires": .int32(60000)]),
             consumerOptions: ConsumerOptions(noAck: true)

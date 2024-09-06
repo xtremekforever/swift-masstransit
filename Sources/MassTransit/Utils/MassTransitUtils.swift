@@ -13,9 +13,3 @@ func randomString(length: Int) -> String {
 func getModuleName<T>(_ module: T) -> String {
     return String(String(reflecting: T.self).prefix { $0 != "." }).replacingOccurrences(of: "_", with: "")
 }
-
-func gracefulCancellableDelay(timeout: Duration) async {
-    for await _ in AsyncTimerSequence(interval: timeout, clock: .continuous).cancelOnGracefulShutdown() {
-        break
-    }
-}

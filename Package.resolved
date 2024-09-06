@@ -87,7 +87,7 @@
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
         "branch" : "feature/6-change-connection-configuration",
-        "revision" : "5273be9964bd175ed83721fd9a46633ee4230214"
+        "revision" : "8deacac4829227837181198529d017a58c51a803"
       }
     },
     {
