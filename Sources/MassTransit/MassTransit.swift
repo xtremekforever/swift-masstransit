@@ -9,11 +9,11 @@ public let MassTransitDefaultRetryInterval = Duration.seconds(30)
 public let MassTransitDefaultTimeout = Duration.seconds(30)
 
 public struct MassTransit: Sendable {
-    private let rabbitMq: RetryingConnection
+    private let rabbitMq: Connection
     private let logger: Logger
 
     public init(
-        _ rabbitMq: RetryingConnection,
+        _ rabbitMq: Connection,
         logger: Logger = Logger(label: "\(MassTransit.self)")
     ) {
         self.rabbitMq = rabbitMq
