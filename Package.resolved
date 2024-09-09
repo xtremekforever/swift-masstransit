@@ -10,6 +10,15 @@
       }
     },
     {
+      "identity" : "semaphore",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/groue/Semaphore.git",
+      "state" : {
+        "revision" : "2543679282aa6f6c8ecf2138acd613ed20790bc2",
+        "version" : "0.1.0"
+      }
+    },
+    {
       "identity" : "swift-async-algorithms",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/apple/swift-async-algorithms",
@@ -86,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "feature/6-change-connection-configuration",
-        "revision" : "40150b4da89cbb523713fc070a234d688f78dc7d"
+        "branch" : "main",
+        "revision" : "049264db4a2e1309a10a26e03be0cdb7b35df508"
       }
     },
     {
