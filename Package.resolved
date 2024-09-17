@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "main",
-        "revision" : "049264db4a2e1309a10a26e03be0cdb7b35df508"
+        "branch" : "feature/7-refactor-run-fix-memleaks",
+        "revision" : "7bc7add45b72cf0a19537075f4a520fb78e54bc3"
       }
     },
     {
