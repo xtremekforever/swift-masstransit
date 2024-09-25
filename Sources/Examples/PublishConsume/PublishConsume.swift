@@ -20,7 +20,8 @@ try await withThrowingDiscardingTaskGroup { group in
     }
     // Publish on an interval
     group.addTask {
-        for await _ in AsyncTimerSequence(interval: .seconds(1), clock: .continuous) {
+        let timerSequence = AsyncTimerSequence(interval: .seconds(1), clock: .continuous)
+        for await _ in timerSequence.buffer(policy: .bufferingLatest(1)) {
             let event = MyTestEvent(
                 id: UUID(),
                 name: "My Event!"

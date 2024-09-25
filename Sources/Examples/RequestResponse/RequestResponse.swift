@@ -25,7 +25,8 @@ try await withThrowingDiscardingTaskGroup { group in
 
     // This will request on an interval
     group.addTask {
-        for await _ in AsyncTimerSequence(interval: .seconds(1), clock: .continuous).debounce(for: .seconds(1)) {
+        let timerSequence = AsyncTimerSequence(interval: .seconds(1), clock: .continuous)
+        for await _ in timerSequence.buffer(policy: .bufferingLatest(1)) {
             do {
                 let response = try await massTransit.request(
                     MyRequest(value: "please give me something"), MyResponse.self,
