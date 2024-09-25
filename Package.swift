@@ -15,10 +15,8 @@ let package = Package(
             targets: ["MassTransit"])
     ],
     dependencies: [
-        .package(
-            url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "feature/11-improve-efficiency-lifecycle"),
+        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "main"),
         .package(url: "https://github.com/apple/swift-distributed-tracing-extras.git", from: "1.0.0-beta.1"),
-
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
