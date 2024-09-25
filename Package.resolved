@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "main",
-        "revision" : "c10f0d35be9c2f587a3d07270a2a434bfce5a92f"
+        "branch" : "feature/11-improve-efficiency-lifecycle",
+        "revision" : "2ed8c4a9471083e387c1d761cf2480e994f52e28"
       }
     },
     {

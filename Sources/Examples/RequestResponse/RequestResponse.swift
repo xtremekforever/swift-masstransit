@@ -14,13 +14,13 @@ struct MyResponse: MassTransitMessage {
 
 var logger = Logger(label: "RequestResponse")
 logger.logLevel = .debug
-let rabbitMq = try RetryingConnection("amqp://guest:guest@localhost/%2F", logger: logger)
+let rabbitMq = RetryingConnection("amqp://guest:guest@localhost/%2F", logger: logger)
 let massTransit = MassTransit(rabbitMq, logger: logger)
 
 try await withThrowingDiscardingTaskGroup { group in
     // Supervise RabbitMq connection
     group.addTask {
-        try await rabbitMq.run()
+        await rabbitMq.run()
     }
 
     // This will request on an interval

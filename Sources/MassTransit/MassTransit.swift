@@ -95,8 +95,9 @@ public struct MassTransit: Sendable {
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
+        let consumeStream = try await consumer.retryingConsume(retryInterval: retryInterval)
         return AnyAsyncSequence<T>(
-            try await consumer.retryingConsume(retryInterval: retryInterval).compactMap { message in
+            consumeStream.compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: message)
 
@@ -128,8 +129,9 @@ public struct MassTransit: Sendable {
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
+        let consumeStream = try await consumer.retryingConsume(retryInterval: retryInterval)
         return AnyAsyncSequence<RequestContext<T>>(
-            try await consumer.retryingConsume(retryInterval: retryInterval).compactMap { message in
+            consumeStream.compactMap { message in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: message)
 
