@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "main",
-        "revision" : "04b13702af20a2aed45c2b118faed54693792904"
+        "revision" : "df90d71ab9a1b3162f94267e76a886cc76f6696f",
+        "version" : "0.1.0"
       }
     },
     {
