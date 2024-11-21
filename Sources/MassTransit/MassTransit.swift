@@ -95,11 +95,11 @@ public struct MassTransit: Sendable {
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
-        let consumeStream = try await consumer.retryingConsume(retryInterval: retryInterval)
+        let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<T>(
-            consumeStream.compactMap { message in
+            consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    let wrapper = try MassTransitWrapper(T.self, from: message)
+                    let wrapper = try MassTransitWrapper(T.self, from: buffer)
 
                     // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
@@ -129,11 +129,11 @@ public struct MassTransit: Sendable {
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
-        let consumeStream = try await consumer.retryingConsume(retryInterval: retryInterval)
+        let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<RequestContext<T>>(
-            consumeStream.compactMap { message in
+            consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    let wrapper = try MassTransitWrapper(T.self, from: message)
+                    let wrapper = try MassTransitWrapper(T.self, from: buffer)
 
                     // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
@@ -201,7 +201,7 @@ public struct MassTransit: Sendable {
         request.responseAddress = address
 
         // Start consuming before publishing request so we can get the response
-        let responseStream = try await consumer.consume()
+        let responseStream = try await consumer.consumeBuffer()
 
         // Send the request with a regular publish
         logger.info("Sending request of type \(T.self) to exchange \(exchangeName)...")
