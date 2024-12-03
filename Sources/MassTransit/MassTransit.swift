@@ -35,6 +35,7 @@ public struct MassTransit: Sendable {
 
         // Create MassTransitWrapper to send the message
         let wrapper = MassTransitWrapper<T>.create(using: value, urn: messageType)
+        logger.trace("Wrapper for send: \(wrapper)")
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
@@ -67,6 +68,7 @@ public struct MassTransit: Sendable {
 
         // Create MassTransitWrapper to send the message
         let wrapper = MassTransitWrapper<T>.create(using: value, urn: messageType)
+        logger.trace("Wrapper for publish: \(wrapper)")
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
@@ -106,6 +108,7 @@ public struct MassTransit: Sendable {
             consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: buffer)
+                    logger.trace("Wrapper consumed: \(wrapper)")
 
                     // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
@@ -140,6 +143,7 @@ public struct MassTransit: Sendable {
             consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: buffer)
+                    logger.trace("Wrapper consumed: \(wrapper)")
 
                     // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
@@ -149,6 +153,7 @@ public struct MassTransit: Sendable {
                         connection: rabbitMq,
                         requestId: wrapper.requestId,
                         responseAddress: wrapper.responseAddress,
+                        logger: logger,
                         message: wrapper.message
                     )
                 }
@@ -213,6 +218,7 @@ public struct MassTransit: Sendable {
         request.requestId = UUID().uuidString
         request.sourceAddress = address
         request.responseAddress = address
+        logger.trace("Wrapper for request: \(request)")
 
         // Start consuming before publishing request so we can get the response
         let responseStream = try await consumer.consumeBuffer()

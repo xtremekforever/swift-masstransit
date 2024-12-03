@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import RabbitMq
 import Tracing
 
@@ -7,6 +8,7 @@ public struct RequestContext<T: MassTransitMessage>: Sendable {
     internal let connection: Connection
     internal let requestId: String?
     internal let responseAddress: String?
+    internal let logger: Logger
     public let message: T
 }
 
@@ -32,6 +34,7 @@ extension RequestContext {
             messageType: ["urn:message:\(exchangeName)"],
             message: value
         )
+        logger.trace("Wrapper for response: \(response)")
 
         // Encode to JSON
         let messageJson = try response.jsonEncode()
