@@ -1,4 +1,6 @@
 import Foundation
+import NIOCore
+import NIOFoundationCompat
 
 public typealias MassTransitMessage = Codable & Sendable
 
@@ -13,28 +15,28 @@ struct MassTransitWrapper<T: MassTransitMessage>: MassTransitMessage {
 }
 
 extension MassTransitWrapper {
-    init(_: T.Type, from jsonString: String) throws {
+    init(_: T.Type, from buffer: ByteBuffer) throws {
         // Decode from JSON
         let decoder = JSONDecoder()
-        guard let data = jsonString.data(using: .utf8),
-            let wrapper = try? decoder.decode(Self.self, from: data)
+        decoder.dateDecodingStrategy = .iso8601
+        guard let wrapper = try? decoder.decode(Self.self, from: buffer)
         else {
             throw MassTransitError.parsingError
         }
         self = wrapper
     }
 
-    func jsonEncode() throws -> String {
+    func jsonEncode() throws -> ByteBuffer {
         // Encode to JSON
         let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
-        guard let json = try? encoder.encode(self),
-            let jsonString = String(data: json, encoding: .utf8)
+        guard let json = try? encoder.encodeAsByteBuffer(self, allocator: .init())
         else {
             throw MassTransitError.parsingError
         }
 
-        return jsonString
+        return json
     }
 
     static func create<TMessage: MassTransitMessage>(from value: TMessage, using exchangeName: String)

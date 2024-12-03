@@ -15,7 +15,8 @@ let package = Package(
             targets: ["MassTransit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", from: "0.1.0"),
+        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "main"),
+        .package(url: "https://github.com/apple/swift-nio.git", from: "2.48.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing-extras.git", from: "1.0.0-beta.1"),
     ],
     targets: [
@@ -25,6 +26,7 @@ let package = Package(
             name: "MassTransit",
             dependencies: [
                 .product(name: "RabbitMq", package: "swift-rabbitmq"),
+                .product(name: "NIOFoundationCompat", package: "swift-nio"),
                 .product(name: "TracingOpenTelemetrySemanticConventions", package: "swift-distributed-tracing-extras"),
             ]
         ),

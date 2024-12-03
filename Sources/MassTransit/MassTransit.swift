@@ -22,7 +22,7 @@ public struct MassTransit: Sendable {
 
     public func send<T: MassTransitMessage>(
         _ value: T,
-        exchangeName: String = "\(T.self)",
+        exchangeName: String = String(describing: T.self),
         routingKey: String = ""
     ) async throws {
         let publisher = Publisher(
@@ -49,12 +49,10 @@ public struct MassTransit: Sendable {
 
     public func publish<T: MassTransitMessage>(
         _ value: T,
-        exchangeName: String = "\(T.self)",
+        exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
-    )
-        async throws
-    {
+    ) async throws {
         let publisher = Publisher(
             rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
         )
@@ -79,13 +77,11 @@ public struct MassTransit: Sendable {
 
     public func consume<T: MassTransitMessage>(
         _: T.Type,
-        queueName: String = "\(T.self)-Consumer",
-        exchangeName: String = "\(T.self)",
+        queueName: String = "\(String(describing: T.self))-Consumer",
+        exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
-    )
-        async throws -> AnyAsyncSequence<T>
-    {
+    ) async throws -> AnyAsyncSequence<T> {
         let consumer = Consumer(
             rabbitMq, queueName, exchangeName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
@@ -95,11 +91,11 @@ public struct MassTransit: Sendable {
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
-        let consumeStream = try await consumer.retryingConsume(retryInterval: retryInterval)
+        let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<T>(
-            consumeStream.compactMap { message in
+            consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    let wrapper = try MassTransitWrapper(T.self, from: message)
+                    let wrapper = try MassTransitWrapper(T.self, from: buffer)
 
                     // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
@@ -113,8 +109,8 @@ public struct MassTransit: Sendable {
 
     public func consumeWithContext<T: MassTransitMessage>(
         _: T.Type,
-        queueName: String = "\(T.self)-Consumer",
-        exchangeName: String = "\(T.self)",
+        queueName: String = "\(String(describing: T.self))-Consumer",
+        exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
     )
@@ -129,11 +125,11 @@ public struct MassTransit: Sendable {
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
-        let consumeStream = try await consumer.retryingConsume(retryInterval: retryInterval)
+        let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<RequestContext<T>>(
-            consumeStream.compactMap { message in
+            consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    let wrapper = try MassTransitWrapper(T.self, from: message)
+                    let wrapper = try MassTransitWrapper(T.self, from: buffer)
 
                     // Log!
                     logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
@@ -153,7 +149,7 @@ public struct MassTransit: Sendable {
     public func request<T: MassTransitMessage, TResponse: MassTransitMessage>(
         _ value: T,
         _: TResponse.Type,
-        exchangeName: String = "\(T.self)",
+        exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         timeout: Duration = MassTransitDefaultTimeout
     ) async throws -> TResponse {
@@ -176,7 +172,7 @@ public struct MassTransit: Sendable {
     private func performRequest<T: MassTransitMessage, TResponse: MassTransitMessage>(
         _ value: T,
         _: TResponse.Type,
-        _ exchangeName: String = "\(T.self)",
+        _ exchangeName: String = String(describing: T.self),
         _ routingKey: String = ""
     ) async throws -> TResponse {
         // Publisher is used to send the request
@@ -201,7 +197,7 @@ public struct MassTransit: Sendable {
         request.responseAddress = address
 
         // Start consuming before publishing request so we can get the response
-        let responseStream = try await consumer.consume()
+        let responseStream = try await consumer.consumeBuffer()
 
         // Send the request with a regular publish
         logger.info("Sending request of type \(T.self) to exchange \(exchangeName)...")
