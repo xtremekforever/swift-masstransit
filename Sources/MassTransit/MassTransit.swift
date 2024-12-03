@@ -23,10 +23,11 @@ public struct MassTransit: Sendable {
     public func send<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = ""
     ) async throws {
         let publisher = Publisher(
-            rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+            rabbitMq, exchangeName, exchangeOptions: exchangeOptions
         )
 
         // Create MassTransitWrapper to send the message
@@ -50,11 +51,12 @@ public struct MassTransit: Sendable {
     public func publish<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws {
         let publisher = Publisher(
-            rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+            rabbitMq, exchangeName, exchangeOptions: exchangeOptions
         )
 
         // Create MassTransitWrapper to send the message
@@ -78,14 +80,16 @@ public struct MassTransit: Sendable {
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
+        queueOptions: QueueOptions = .massTransitDefaults,
         exchangeName: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws -> AnyAsyncSequence<T> {
         let consumer = Consumer(
             rabbitMq, queueName, exchangeName, routingKey,
-            exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
-            queueOptions: QueueOptions(autoDelete: true, durable: true),
+            exchangeOptions: exchangeOptions,
+            queueOptions: queueOptions,
             consumerOptions: ConsumerOptions(noAck: true)
         )
 
@@ -110,16 +114,16 @@ public struct MassTransit: Sendable {
     public func consumeWithContext<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
+        queueOptions: QueueOptions = .massTransitDefaults,
         exchangeName: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
-    )
-        async throws -> AnyAsyncSequence<RequestContext<T>>
-    {
+    ) async throws -> AnyAsyncSequence<RequestContext<T>> {
         let consumer = Consumer(
             rabbitMq, queueName, exchangeName, routingKey,
-            exchangeOptions: ExchangeOptions(type: .fanout, durable: true),
-            queueOptions: QueueOptions(autoDelete: true, durable: true),
+            exchangeOptions: exchangeOptions,
+            queueOptions: queueOptions,
             consumerOptions: ConsumerOptions(noAck: true)
         )
 
@@ -150,13 +154,14 @@ public struct MassTransit: Sendable {
         _ value: T,
         _: TResponse.Type,
         exchangeName: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
         timeout: Duration = MassTransitDefaultTimeout
     ) async throws -> TResponse {
         // Use task group to timeout request
         return try await withThrowingTaskGroup(of: TResponse.self) { group in
             group.addTask {
-                return try await performRequest(value, TResponse.self, exchangeName, routingKey)
+                return try await performRequest(value, TResponse.self, exchangeName, exchangeOptions, routingKey)
             }
             group.addTask {
                 await gracefulCancellableDelay(timeout)
@@ -172,12 +177,13 @@ public struct MassTransit: Sendable {
     private func performRequest<T: MassTransitMessage, TResponse: MassTransitMessage>(
         _ value: T,
         _: TResponse.Type,
-        _ exchangeName: String = String(describing: T.self),
-        _ routingKey: String = ""
+        _ exchangeName: String,
+        _ exchangeOptions: ExchangeOptions,
+        _ routingKey: String
     ) async throws -> TResponse {
         // Publisher is used to send the request
         let publisher: Publisher = Publisher(
-            rabbitMq, exchangeName, exchangeOptions: ExchangeOptions(type: .fanout, durable: true)
+            rabbitMq, exchangeName, exchangeOptions: exchangeOptions
         )
 
         // Consumer is used to get a response with a custom requestName and address provided
