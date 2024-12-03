@@ -95,8 +95,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "14-implement-the-ability-to-publish-and-consume-using-nio-bytebuffers",
-        "revision" : "707fcb45c70d0ba1b7813c06ae428e5512870afa"
+        "branch" : "main",
+        "revision" : "117a75002cad59dbd3d67c3426441892a774a88e"
       }
     },
     {
