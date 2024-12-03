@@ -18,6 +18,7 @@ extension MassTransitWrapper {
     init(_: T.Type, from buffer: ByteBuffer) throws {
         // Decode from JSON
         let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
         guard let wrapper = try? decoder.decode(Self.self, from: buffer)
         else {
             throw MassTransitError.parsingError
@@ -28,6 +29,7 @@ extension MassTransitWrapper {
     func jsonEncode() throws -> ByteBuffer {
         // Encode to JSON
         let encoder = JSONEncoder()
+        encoder.dateEncodingStrategy = .iso8601
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         guard let json = try? encoder.encodeAsByteBuffer(self, allocator: .init())
         else {
