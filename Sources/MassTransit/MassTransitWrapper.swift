@@ -39,14 +39,14 @@ extension MassTransitWrapper {
         return json
     }
 
-    static func create<TMessage: MassTransitMessage>(from value: TMessage, using exchangeName: String)
-        -> MassTransitWrapper<
-            TMessage
-        >
-    {
-        return MassTransitWrapper<TMessage>(
+    static func create<TMessage: MassTransitMessage>(
+        using value: TMessage, urn: String
+    ) -> MassTransitWrapper<TMessage> {
+        assert(!urn.isEmpty)
+
+        return .init(
             messageId: UUID().uuidString,
-            messageType: ["urn:message:\(exchangeName)"],
+            messageType: ["urn:message:\(urn)"],
             message: value
         )
     }

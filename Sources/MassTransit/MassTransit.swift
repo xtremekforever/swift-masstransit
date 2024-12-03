@@ -24,21 +24,24 @@ public struct MassTransit: Sendable {
         _ value: T,
         exchangeName: String = String(describing: T.self),
         exchangeOptions: ExchangeOptions = .massTransitDefaults,
+        customMessageType: String? = nil,
         routingKey: String = ""
     ) async throws {
         let publisher = Publisher(
             rabbitMq, exchangeName, exchangeOptions: exchangeOptions
         )
 
+        let messageType = customMessageType ?? exchangeName
+
         // Create MassTransitWrapper to send the message
-        let wrapper = MassTransitWrapper<T>.create(from: value, using: exchangeName)
+        let wrapper = MassTransitWrapper<T>.create(using: value, urn: messageType)
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
 
         // Publish message with span processor
-        logger.debug("Sending message of type \(T.self) on exchange \(exchangeName)...")
-        try await withSpan("\(T.self) send", ofKind: .producer) { span in
+        logger.debug("Sending message of type \(messageType) on exchange \(exchangeName)...")
+        try await withSpan("\(messageType) send", ofKind: .producer) { span in
             span.attributes.messaging.messageID = wrapper.messageId
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
@@ -52,6 +55,7 @@ public struct MassTransit: Sendable {
         _ value: T,
         exchangeName: String = String(describing: T.self),
         exchangeOptions: ExchangeOptions = .massTransitDefaults,
+        customMessageType: String? = nil,
         routingKey: String = "",
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws {
@@ -59,15 +63,17 @@ public struct MassTransit: Sendable {
             rabbitMq, exchangeName, exchangeOptions: exchangeOptions
         )
 
+        let messageType = customMessageType ?? exchangeName
+
         // Create MassTransitWrapper to send the message
-        let wrapper = MassTransitWrapper<T>.create(from: value, using: exchangeName)
+        let wrapper = MassTransitWrapper<T>.create(using: value, urn: messageType)
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
 
         // Publish message with span processor
-        logger.info("Publishing message of type \(T.self) on exchange \(exchangeName)...")
-        try await withSpan("\(T.self) publish", ofKind: .producer) { span in
+        logger.info("Publishing message of type \(messageType) on exchange \(exchangeName)...")
+        try await withSpan("\(messageType) publish", ofKind: .producer) { span in
             span.attributes.messaging.messageID = wrapper.messageId
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
@@ -155,13 +161,16 @@ public struct MassTransit: Sendable {
         _: TResponse.Type,
         exchangeName: String = String(describing: T.self),
         exchangeOptions: ExchangeOptions = .massTransitDefaults,
+        customMessageType: String? = nil,
         routingKey: String = "",
         timeout: Duration = MassTransitDefaultTimeout
     ) async throws -> TResponse {
         // Use task group to timeout request
         return try await withThrowingTaskGroup(of: TResponse.self) { group in
             group.addTask {
-                return try await performRequest(value, TResponse.self, exchangeName, exchangeOptions, routingKey)
+                return try await performRequest(
+                    value, TResponse.self, exchangeName, exchangeOptions, customMessageType, routingKey
+                )
             }
             group.addTask {
                 await gracefulCancellableDelay(timeout)
@@ -179,6 +188,7 @@ public struct MassTransit: Sendable {
         _: TResponse.Type,
         _ exchangeName: String,
         _ exchangeOptions: ExchangeOptions,
+        _ customMessageType: String?,
         _ routingKey: String
     ) async throws -> TResponse {
         // Publisher is used to send the request
@@ -196,8 +206,10 @@ public struct MassTransit: Sendable {
             consumerOptions: ConsumerOptions(noAck: true)
         )
 
+        let messageType = customMessageType ?? exchangeName
+
         // Create MassTransitWrapper to send the request
-        var request = MassTransitWrapper<T>.create(from: value, using: exchangeName)
+        var request = MassTransitWrapper<T>.create(using: value, urn: messageType)
         request.requestId = UUID().uuidString
         request.sourceAddress = address
         request.responseAddress = address
@@ -206,9 +218,9 @@ public struct MassTransit: Sendable {
         let responseStream = try await consumer.consumeBuffer()
 
         // Send the request with a regular publish
-        logger.info("Sending request of type \(T.self) to exchange \(exchangeName)...")
+        logger.info("Sending request of type \(messageType) to exchange \(exchangeName)...")
         let requestJson = try request.jsonEncode()
-        try await withSpan("\(T.self) request", ofKind: .producer) { span in
+        try await withSpan("\(messageType) request", ofKind: .producer) { span in
             span.attributes.messaging.messageID = request.messageId
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
