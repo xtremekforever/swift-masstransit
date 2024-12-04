@@ -27,7 +27,7 @@ public struct MassTransit: Sendable {
         configuration: MassTransitPublisherConfiguration = .init(),
         customMessageType: String? = nil
     ) async throws {
-        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName: exchangeName)
+        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName)
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
@@ -57,7 +57,7 @@ public struct MassTransit: Sendable {
         customMessageType: String? = nil,
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws {
-        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName: exchangeName)
+        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName)
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
@@ -87,7 +87,7 @@ public struct MassTransit: Sendable {
         configuration: MassTransitConsumerConfiguration = .init(),
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws -> AnyAsyncSequence<T> {
-        let consumer = configuration.createConsumer(using: rabbitMq, queueName: queueName, exchangeName: exchangeName)
+        let consumer = configuration.createConsumer(using: rabbitMq, queueName, exchangeName, routingKey)
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
@@ -95,6 +95,8 @@ public struct MassTransit: Sendable {
         return AnyAsyncSequence<T>(
             consumeStream.compactMap { buffer in
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
+                    logger.trace("Received buffer: \(String(buffer: buffer))")
+
                     let wrapper = try MassTransitWrapper(T.self, from: buffer)
                     logger.trace("Wrapper consumed: \(wrapper)")
 
@@ -116,7 +118,7 @@ public struct MassTransit: Sendable {
         configuration: MassTransitConsumerConfiguration = .init(),
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws -> AnyAsyncSequence<RequestContext<T>> {
-        let consumer = configuration.createConsumer(using: rabbitMq, queueName: queueName, exchangeName: exchangeName)
+        let consumer = configuration.createConsumer(using: rabbitMq, queueName, exchangeName, routingKey)
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
@@ -179,7 +181,7 @@ public struct MassTransit: Sendable {
         _ customMessageType: String?
     ) async throws -> TResponse {
         // Publisher is used to send the request
-        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName: exchangeName)
+        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName)
 
         // Consumer is used to get a response with a custom requestName and address provided
         let requestName = "\(ProcessInfo.processInfo.hostName)_\(getModuleName(self))_bus_\(randomString(length: 26))"

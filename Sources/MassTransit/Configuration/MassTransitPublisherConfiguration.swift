@@ -14,7 +14,7 @@ public struct MassTransitPublisherConfiguration: Sendable {
 }
 
 extension MassTransitPublisherConfiguration {
-    func createPublisher(using connection: Connection, exchangeName: String) -> Publisher {
+    func createPublisher(using connection: Connection, _ exchangeName: String) -> Publisher {
         .init(
             connection, exchangeName,
             exchangeOptions: exchangeOptions,

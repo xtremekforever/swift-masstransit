@@ -17,9 +17,11 @@ public struct MassTransitConsumerConfiguration: Sendable {
 }
 
 extension MassTransitConsumerConfiguration {
-    func createConsumer(using connection: Connection, queueName: String, exchangeName: String) -> Consumer {
+    func createConsumer(
+        using connection: Connection, _ queueName: String, _ exchangeName: String, _ routingKey: String
+    ) -> Consumer {
         .init(
-            connection, queueName, exchangeName,
+            connection, queueName, exchangeName, routingKey,
             exchangeOptions: exchangeOptions,
             queueOptions: queueOptions,
             consumerOptions: consumerOptions
