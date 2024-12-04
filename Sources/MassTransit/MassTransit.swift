@@ -23,14 +23,11 @@ public struct MassTransit: Sendable {
     public func send<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = String(describing: T.self),
-        exchangeOptions: ExchangeOptions = .massTransitDefaults,
-        customMessageType: String? = nil,
-        routingKey: String = ""
+        routingKey: String = "",
+        configuration: MassTransitPublisherConfiguration = .init(),
+        customMessageType: String? = nil
     ) async throws {
-        let publisher = Publisher(
-            rabbitMq, exchangeName, exchangeOptions: exchangeOptions
-        )
-
+        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName: exchangeName)
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
@@ -55,15 +52,12 @@ public struct MassTransit: Sendable {
     public func publish<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = String(describing: T.self),
-        exchangeOptions: ExchangeOptions = .massTransitDefaults,
-        customMessageType: String? = nil,
         routingKey: String = "",
+        configuration: MassTransitPublisherConfiguration = .init(),
+        customMessageType: String? = nil,
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws {
-        let publisher = Publisher(
-            rabbitMq, exchangeName, exchangeOptions: exchangeOptions
-        )
-
+        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName: exchangeName)
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
@@ -165,16 +159,16 @@ public struct MassTransit: Sendable {
         _ value: T,
         _: TResponse.Type,
         exchangeName: String = String(describing: T.self),
-        exchangeOptions: ExchangeOptions = .massTransitDefaults,
-        customMessageType: String? = nil,
         routingKey: String = "",
-        timeout: Duration = MassTransitDefaultTimeout
+        timeout: Duration = MassTransitDefaultTimeout,
+        configuration: MassTransitPublisherConfiguration = .init(),
+        customMessageType: String? = nil
     ) async throws -> TResponse {
         // Use task group to timeout request
         return try await withThrowingTaskGroup(of: TResponse.self) { group in
             group.addTask {
                 return try await performRequest(
-                    value, TResponse.self, exchangeName, exchangeOptions, customMessageType, routingKey
+                    value, TResponse.self, exchangeName, routingKey, configuration, customMessageType
                 )
             }
             group.addTask {
@@ -192,14 +186,12 @@ public struct MassTransit: Sendable {
         _ value: T,
         _: TResponse.Type,
         _ exchangeName: String,
-        _ exchangeOptions: ExchangeOptions,
-        _ customMessageType: String?,
-        _ routingKey: String
+        _ routingKey: String,
+        _ configuration: MassTransitPublisherConfiguration,
+        _ customMessageType: String?
     ) async throws -> TResponse {
         // Publisher is used to send the request
-        let publisher: Publisher = Publisher(
-            rabbitMq, exchangeName, exchangeOptions: exchangeOptions
-        )
+        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName: exchangeName)
 
         // Consumer is used to get a response with a custom requestName and address provided
         let requestName = "\(ProcessInfo.processInfo.hostName)_\(getModuleName(self))_bus_\(randomString(length: 26))"
