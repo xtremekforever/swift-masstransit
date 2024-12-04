@@ -82,18 +82,12 @@ public struct MassTransit: Sendable {
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
-        queueOptions: QueueOptions = .massTransitDefaults,
         exchangeName: String = String(describing: T.self),
-        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
+        configuration: MassTransitConsumerConfiguration = .init(),
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws -> AnyAsyncSequence<T> {
-        let consumer = Consumer(
-            rabbitMq, queueName, exchangeName, routingKey,
-            exchangeOptions: exchangeOptions,
-            queueOptions: queueOptions,
-            consumerOptions: ConsumerOptions(noAck: true)
-        )
+        let consumer = configuration.createConsumer(using: rabbitMq, queueName: queueName, exchangeName: exchangeName)
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
@@ -117,18 +111,12 @@ public struct MassTransit: Sendable {
     public func consumeWithContext<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
-        queueOptions: QueueOptions = .massTransitDefaults,
         exchangeName: String = String(describing: T.self),
-        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
+        configuration: MassTransitConsumerConfiguration = .init(),
         retryInterval: Duration = MassTransitDefaultRetryInterval
     ) async throws -> AnyAsyncSequence<RequestContext<T>> {
-        let consumer = Consumer(
-            rabbitMq, queueName, exchangeName, routingKey,
-            exchangeOptions: exchangeOptions,
-            queueOptions: queueOptions,
-            consumerOptions: ConsumerOptions(noAck: true)
-        )
+        let consumer = configuration.createConsumer(using: rabbitMq, queueName: queueName, exchangeName: exchangeName)
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
