@@ -36,6 +36,9 @@ public struct MassTransit: Sendable {
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
+        #if DEBUG
+            logger.trace("Message JSON to send: \(String(buffer: messageJson))")
+        #endif
 
         // Publish message with span processor
         logger.debug("Sending message of type \(messageType) on exchange \(exchangeName)...")
@@ -66,6 +69,9 @@ public struct MassTransit: Sendable {
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
+        #if DEBUG
+            logger.trace("Message JSON to publish: \(String(buffer: messageJson))")
+        #endif
 
         // Publish message with span processor
         logger.info("Publishing message of type \(messageType) on exchange \(exchangeName)...")
@@ -94,6 +100,10 @@ public struct MassTransit: Sendable {
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<T>(
             consumeStream.compactMap { buffer in
+                #if DEBUG
+                    logger.trace("Consumed buffer: \(String(buffer: buffer))")
+                #endif
+
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     logger.trace("Received buffer: \(String(buffer: buffer))")
 
@@ -125,6 +135,10 @@ public struct MassTransit: Sendable {
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<RequestContext<T>>(
             consumeStream.compactMap { buffer in
+                #if DEBUG
+                    logger.trace("Consumed buffer: \(String(buffer: buffer))")
+                #endif
+
                 return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
                     let wrapper = try MassTransitWrapper(T.self, from: buffer)
                     logger.trace("Wrapper consumed: \(wrapper)")
@@ -208,6 +222,9 @@ public struct MassTransit: Sendable {
         // Send the request with a regular publish
         logger.info("Sending request of type \(messageType) to exchange \(exchangeName)...")
         let requestJson = try request.jsonEncode()
+        #if DEBUG
+            logger.trace("Request JSON: \(String(buffer: requestJson))")
+        #endif
         try await withSpan("\(messageType) request", ofKind: .producer) { span in
             span.attributes.messaging.messageID = request.messageId
             span.attributes.messaging.destination = exchangeName
@@ -219,6 +236,9 @@ public struct MassTransit: Sendable {
 
         logger.debug("Waiting for response of type \(TResponse.self) on queue \(requestName)...")
         for await responseJson in responseStream {
+            #if DEBUG
+                logger.trace("Response JSON: \(String(buffer: responseJson))")
+            #endif
             let response = try MassTransitWrapper(TResponse.self, from: responseJson)
             logger.debug("Received response \(response.message) from queue \(requestName)")
             return response.message
