@@ -8,7 +8,7 @@ public struct MassTransitConsumerConfiguration: Sendable {
     public init(
         queueOptions: QueueOptions = .massTransitDefaults,
         exchangeOptions: ExchangeOptions = .massTransitDefaults,
-        consumerOptions: ConsumerOptions = .init()
+        consumerOptions: ConsumerOptions = .massTransitDefaults
     ) {
         self.queueOptions = queueOptions
         self.exchangeOptions = exchangeOptions
