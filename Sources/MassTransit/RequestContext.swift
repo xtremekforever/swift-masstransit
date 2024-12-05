@@ -15,9 +15,11 @@ public struct RequestContext<T: MassTransitMessage>: Sendable {
 extension RequestContext {
     public func respond<TResponse: MassTransitMessage>(
         _ value: TResponse,
-        exchangeName: String = "\(TResponse.self)",
+        exchangeName: String = String(describing: TResponse.self),
         routingKey: String = "",
-        retryInterval: Duration = MassTransitDefaultRetryInterval
+        configuration: MassTransitPublisherConfiguration = .init(),
+        customMessageType: String? = nil,
+        retryInterval: Duration = MassTransit.defaultRetryInterval
     ) async throws {
         guard let responseAddress = responseAddress,
             let responseUrl = URL(string: responseAddress),
@@ -25,27 +27,27 @@ extension RequestContext {
         else {
             throw MassTransitError.invalidContext
         }
+        let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the response
         let response = MassTransitWrapper(
             messageId: UUID().uuidString,
             requestId: requestId,
             destinationAddress: responseAddress,
-            messageType: ["urn:message:\(exchangeName)"],
+            messageType: ["urn:message:\(messageType)"],
             message: value
         )
         logger.trace("Wrapper for response: \(response)")
 
         // Encode to JSON
         let messageJson = try response.jsonEncode()
+        #if DEBUG
+            logger.trace("Message JSON to respond: \(String(buffer: messageJson))")
+        #endif
 
         // Publisher is used to send the response
-        let publisher = Publisher(
-            connection,
-            responseExchange,
-            exchangeOptions: .init(type: .fanout, autoDelete: true)
-        )
-        try await withSpan("\(TResponse.self) response", ofKind: .producer) { span in
+        let publisher = configuration.createPublisher(using: connection, exchangeName)
+        try await withSpan("\(messageType) response", ofKind: .producer) { span in
             span.attributes.messaging.messageID = response.messageId
             span.attributes.messaging.destination = responseExchange
             span.attributes.messaging.rabbitMQ.routingKey = routingKey

@@ -5,18 +5,18 @@ import RabbitMq
 import Tracing
 import TracingOpenTelemetrySemanticConventions
 
-public let MassTransitDefaultRetryInterval = Duration.seconds(30)
-public let MassTransitDefaultTimeout = Duration.seconds(30)
-
 public struct MassTransit: Sendable {
-    private let rabbitMq: Connection
+    public static let defaultRetryInterval = Duration.seconds(30)
+    public static let defaultRequestTimeout = Duration.seconds(30)
+
+    private let connection: Connection
     private let logger: Logger
 
     public init(
-        _ rabbitMq: Connection,
+        _ connection: Connection,
         logger: Logger = Logger(label: "\(MassTransit.self)")
     ) {
-        self.rabbitMq = rabbitMq
+        self.connection = connection
         self.logger = logger
     }
 
@@ -27,7 +27,7 @@ public struct MassTransit: Sendable {
         configuration: MassTransitPublisherConfiguration = .init(),
         customMessageType: String? = nil
     ) async throws {
-        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName)
+        let publisher = configuration.createPublisher(using: connection, exchangeName)
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
@@ -46,7 +46,7 @@ public struct MassTransit: Sendable {
             span.attributes.messaging.messageID = wrapper.messageId
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
-            span.attributes.messaging.system = "rabbitmq"
+            span.attributes.messaging.system = "connection"
             try await publisher.publish(messageJson, routingKey: routingKey)
             logger.debug("Sent message \(value) to exchange \(exchangeName)")
         }
@@ -58,9 +58,9 @@ public struct MassTransit: Sendable {
         routingKey: String = "",
         configuration: MassTransitPublisherConfiguration = .init(),
         customMessageType: String? = nil,
-        retryInterval: Duration = MassTransitDefaultRetryInterval
+        retryInterval: Duration = defaultRetryInterval
     ) async throws {
-        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName)
+        let publisher = configuration.createPublisher(using: connection, exchangeName)
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
@@ -79,7 +79,7 @@ public struct MassTransit: Sendable {
             span.attributes.messaging.messageID = wrapper.messageId
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
-            span.attributes.messaging.system = "rabbitmq"
+            span.attributes.messaging.system = "connection"
             try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
             logger.debug("Published message \(value) to exchange \(exchangeName)")
         }
@@ -91,9 +91,9 @@ public struct MassTransit: Sendable {
         exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         configuration: MassTransitConsumerConfiguration = .init(),
-        retryInterval: Duration = MassTransitDefaultRetryInterval
+        retryInterval: Duration = defaultRetryInterval
     ) async throws -> AnyAsyncSequence<T> {
-        let consumer = configuration.createConsumer(using: rabbitMq, queueName, exchangeName, routingKey)
+        let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
@@ -126,9 +126,9 @@ public struct MassTransit: Sendable {
         exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         configuration: MassTransitConsumerConfiguration = .init(),
-        retryInterval: Duration = MassTransitDefaultRetryInterval
+        retryInterval: Duration = defaultRetryInterval
     ) async throws -> AnyAsyncSequence<RequestContext<T>> {
-        let consumer = configuration.createConsumer(using: rabbitMq, queueName, exchangeName, routingKey)
+        let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
         // Consume messages with span tracing
         logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
@@ -148,7 +148,7 @@ public struct MassTransit: Sendable {
 
                     // Create ConsumeContext from message
                     return RequestContext(
-                        connection: rabbitMq,
+                        connection: connection,
                         requestId: wrapper.requestId,
                         responseAddress: wrapper.responseAddress,
                         logger: logger,
@@ -164,7 +164,7 @@ public struct MassTransit: Sendable {
         _: TResponse.Type,
         exchangeName: String = String(describing: T.self),
         routingKey: String = "",
-        timeout: Duration = MassTransitDefaultTimeout,
+        timeout: Duration = defaultRequestTimeout,
         configuration: MassTransitPublisherConfiguration = .init(),
         customMessageType: String? = nil
     ) async throws -> TResponse {
@@ -195,13 +195,13 @@ public struct MassTransit: Sendable {
         _ customMessageType: String?
     ) async throws -> TResponse {
         // Publisher is used to send the request
-        let publisher = configuration.createPublisher(using: rabbitMq, exchangeName)
+        let publisher = configuration.createPublisher(using: connection, exchangeName)
 
         // Consumer is used to get a response with a custom requestName and address provided
         let requestName = "\(ProcessInfo.processInfo.hostName)_\(getModuleName(self))_bus_\(randomString(length: 26))"
-        let address = "\(await rabbitMq.getConnectionAddress())/\(requestName)?temporary=true"
+        let address = "\(await connection.getConnectionAddress())/\(requestName)?temporary=true"
         let consumer = Consumer(
-            rabbitMq, requestName, requestName, routingKey,
+            connection, requestName, requestName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: false, autoDelete: true),
             queueOptions: QueueOptions(autoDelete: true, durable: false, args: ["x-expires": .int32(60000)]),
             consumerOptions: ConsumerOptions(noAck: true)
@@ -229,7 +229,7 @@ public struct MassTransit: Sendable {
             span.attributes.messaging.messageID = request.messageId
             span.attributes.messaging.destination = exchangeName
             span.attributes.messaging.rabbitMQ.routingKey = routingKey
-            span.attributes.messaging.system = "rabbitmq"
+            span.attributes.messaging.system = "connection"
             try await publisher.publish(requestJson, routingKey: routingKey)
             logger.debug("Sent request \(value) to exchange \(exchangeName)")
         }
