@@ -51,6 +51,7 @@ public actor MassTransitConsumer {
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         messageExchange: String = String(describing: T.self),
+        routingKey: String = "",
         customMessageType: String? = nil
     ) async throws -> AsyncStream<T> {
         // Determine message type
