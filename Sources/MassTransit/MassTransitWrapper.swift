@@ -14,6 +14,10 @@ struct MassTransitWrapper<T: MassTransitMessage>: MassTransitMessage {
     var message: T
 }
 
+func urn(from messageType: String) -> String {
+    "urn:message:\(messageType)"
+}
+
 extension MassTransitWrapper {
     init(_: T.Type, from buffer: ByteBuffer) throws {
         // Decode from JSON
@@ -40,14 +44,17 @@ extension MassTransitWrapper {
     }
 
     static func create<TMessage: MassTransitMessage>(
-        using value: TMessage, urn: String
+        using value: TMessage, messageType: String
     ) -> MassTransitWrapper<TMessage> {
-        assert(!urn.isEmpty)
+        assert(!messageType.isEmpty)
 
         return .init(
             messageId: UUID().uuidString,
-            messageType: ["urn:message:\(urn)"],
+            messageType: [urn(from: messageType)],
             message: value
         )
     }
 }
+
+/// Useful for parsing just the MassTransitWrapper while ignoring message content.
+struct EmptyMessage: MassTransitMessage {}

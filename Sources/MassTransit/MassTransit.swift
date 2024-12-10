@@ -31,7 +31,7 @@ public struct MassTransit: Sendable {
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
-        let wrapper = MassTransitWrapper<T>.create(using: value, urn: messageType)
+        let wrapper = MassTransitWrapper<T>.create(using: value, messageType: messageType)
         logger.trace("Wrapper for send: \(wrapper)")
 
         // Encode to JSON
@@ -64,7 +64,7 @@ public struct MassTransit: Sendable {
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the message
-        let wrapper = MassTransitWrapper<T>.create(using: value, urn: messageType)
+        let wrapper = MassTransitWrapper<T>.create(using: value, messageType: messageType)
         logger.trace("Wrapper for publish: \(wrapper)")
 
         // Encode to JSON
@@ -88,36 +88,18 @@ public struct MassTransit: Sendable {
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
-        exchangeName: String = String(describing: T.self),
+        exchangeName: String = "\(String(describing: T.self))-Consumer",
         routingKey: String = "",
         configuration: MassTransitConsumerConfiguration = .init(),
-        retryInterval: Duration = defaultRetryInterval
-    ) async throws -> AnyAsyncSequence<T> {
-        let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
-
-        // Consume messages with span tracing
-        logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
-        let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
-        return AnyAsyncSequence<T>(
-            consumeStream.compactMap { buffer in
-                #if DEBUG
-                    logger.trace("Consumed buffer: \(String(buffer: buffer))")
-                #endif
-
-                return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    logger.trace("Received buffer: \(String(buffer: buffer))")
-
-                    let wrapper = try MassTransitWrapper(T.self, from: buffer)
-                    logger.trace("Wrapper consumed: \(wrapper)")
-
-                    // Log!
-                    logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
-
-                    // Return the message
-                    return wrapper.message
-                }
-            }
+        retryInterval: Duration = defaultRetryInterval,
+        messageExchange: String = String(describing: T.self),
+        customMessageType: String? = nil
+    ) async throws -> AsyncStream<T> {
+        let consumer = MassTransitConsumer(
+            using: connection, queueName: queueName, exchangeName: exchangeName, routingKey: routingKey,
+            configuration: configuration, retryInterval: retryInterval, logger: logger
         )
+        return try await consumer.consume(T.self, messageExchange: messageExchange, customMessageType: customMessageType)
     }
 
     public func consumeWithContext<T: MassTransitMessage>(
@@ -210,7 +192,7 @@ public struct MassTransit: Sendable {
         let messageType = customMessageType ?? exchangeName
 
         // Create MassTransitWrapper to send the request
-        var request = MassTransitWrapper<T>.create(using: value, urn: messageType)
+        var request = MassTransitWrapper<T>.create(using: value, messageType: messageType)
         request.requestId = UUID().uuidString
         request.sourceAddress = address
         request.responseAddress = address
