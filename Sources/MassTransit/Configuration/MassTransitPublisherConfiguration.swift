@@ -1,7 +1,13 @@
 import RabbitMq
 
+/// Configuration for a MassTransit Publisher
+///
+/// This will wrap the options provided by the RabbitMq library for configuring
+/// the publisher that is used under the hood.
 public struct MassTransitPublisherConfiguration: Sendable {
+    /// Options for the exchange that is defined (optionally) and published to.
     public var exchangeOptions: ExchangeOptions
+    /// Options for the publisher on the broker.
     public var publisherOptions: PublisherOptions
 
     public init(
