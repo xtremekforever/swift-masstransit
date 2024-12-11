@@ -25,7 +25,7 @@ extension MassTransitWrapper {
         decoder.dateDecodingStrategy = .iso8601
         guard let wrapper = try? decoder.decode(Self.self, from: buffer)
         else {
-            throw MassTransitError.parsingError
+            throw MassTransitError.decodingError(data: String(buffer: buffer), type: T.self)
         }
         self = wrapper
     }
@@ -37,7 +37,7 @@ extension MassTransitWrapper {
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         guard let json = try? encoder.encodeAsByteBuffer(self, allocator: .init())
         else {
-            throw MassTransitError.parsingError
+            throw MassTransitError.encodingError(message: message)
         }
 
         return json
@@ -57,4 +57,4 @@ extension MassTransitWrapper {
 }
 
 /// Useful for parsing just the MassTransitWrapper while ignoring message content.
-struct EmptyMessage: MassTransitMessage {}
+struct Wrapper: MassTransitMessage {}

@@ -85,36 +85,41 @@ public struct MassTransit: Sendable {
         }
     }
 
-       public func consume<T: MassTransitMessage>(
+    public func consume<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
         exchangeName: String = String(describing: T.self),
         routingKey: String = "",
         configuration: MassTransitConsumerConfiguration = .init(),
+        customMessageType: String? = nil,
         retryInterval: Duration = defaultRetryInterval
     ) async throws -> AnyAsyncSequence<T> {
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
+        // Determine message type
+        let messageType = customMessageType ?? exchangeName
+
         // Consume messages with span tracing
-        logger.info("Consuming messages of type \(T.self) on queue \(queueName)...")
+        logger.info("Consuming messages of type \(messageType) on queue \(queueName)...")
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
         return AnyAsyncSequence<T>(
             consumeStream.compactMap { buffer in
-                #if DEBUG
-                    logger.trace("Consumed buffer: \(String(buffer: buffer))")
-                #endif
+                return withSpan("\(queueName) consume", ofKind: .consumer) { span in
+                    logger.trace("Consumed buffer from \(queueName): \(String(buffer: buffer))")
 
-                return try withSpan("\(T.self) consume", ofKind: .consumer) { span in
-                    logger.trace("Received buffer: \(String(buffer: buffer))")
+                    do {
+                        let wrapper = try MassTransitWrapper(T.self, from: buffer)
+                        logger.trace("Decoded buffer from \(queueName) to wrapper: \(wrapper)")
 
-                    let wrapper = try MassTransitWrapper(T.self, from: buffer)
-                    logger.trace("Wrapper consumed: \(wrapper)")
+                        logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+                        return wrapper.message
+                    } catch {
+                        logger.error("Error in message consumed from \(queueName): \(error)")
 
-                    // Log!
-                    logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+                        // TODO: We should route this to an error queue
+                    }
 
-                    // Return the message
-                    return wrapper.message
+                    return nil
                 }
             }
         )

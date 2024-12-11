@@ -19,14 +19,14 @@ public actor MassTransitConsumer {
     private var consumers: [String: MessageConsumerHandler] = [:]
 
     private struct MessageHandler<T: MassTransitMessage>: MessageConsumerHandler {
+        let queueName: String
         let continuation: AsyncStream<T>.Continuation
         let logger: Logger
-        func handleMessage(buffer: NIOCore.ByteBuffer) throws {
-            // Return the message
-            let message = try MassTransitWrapper(T.self, from: buffer).message
-            logger.debug("Consumed message: \(message)")
 
-            continuation.yield(message)
+        func handleMessage(buffer: ByteBuffer) throws {
+            let wrapper = try MassTransitWrapper(T.self, from: buffer)
+            logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+            continuation.yield(wrapper.message)
         }
     }
 
@@ -46,6 +46,11 @@ public actor MassTransitConsumer {
         self.configuration = configuration
         self.retryInterval = retryInterval
         self.logger = logger
+    }
+
+    private func removeConsumer(messageType: String) {
+        logger.debug("Removing consumer \(messageType) for \(queueName)...")
+        consumers.removeValue(forKey: messageType)
     }
 
     public func consume<T: MassTransitMessage>(
@@ -77,49 +82,62 @@ public actor MassTransitConsumer {
 
         // Create a stream and message handler
         let urn = urn(from: messageType)
-        logger.debug("Registering messageType \(urn) to consume from \(queueName)...")
+        logger.info("Consuming messages of type \(messageType) on queue \(queueName)...")
         let (stream, continuation) = AsyncStream.makeStream(of: T.self)
-        consumers[urn] = MessageHandler(continuation: continuation, logger: logger)
+        consumers[urn] = MessageHandler(queueName: queueName, continuation: continuation, logger: logger)
+
+        // Handle termination
+        continuation.onTermination = { _ in
+            Task { await self.removeConsumer(messageType: urn) }
+        }
 
         return stream
     }
 
     public func run() async throws {
+        logger.info("Starting consumer on queue \(queueName)...")
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
 
-        logger.info("Starting consumer on queue \(queueName)...")
-
         // Consume messages from the consumer
         for await buffer in consumeStream {
-            logger.trace("Consumed buffer: \(String(buffer: buffer))")
+            process(buffer)
+        }
+    }
 
-            try withSpan("\(queueName) consume", ofKind: .consumer) { span in
+    private func process(_ buffer: ByteBuffer) {
+        withSpan("\(queueName) consume", ofKind: .consumer) { span in
+            logger.trace("Consumed buffer from \(queueName): \(String(buffer: buffer))")
+            var handled = false
+
+            do {
                 // We parse the wrapper only to see what the messageTypes are
-                let wrapper = try MassTransitWrapper(EmptyMessage.self, from: buffer)
-                logger.trace("Wrapper received: \(wrapper)")
+                let wrapper = try MassTransitWrapper(Wrapper.self, from: buffer)
 
                 // Looking for matching consumers
-                var handled = false
                 for messageType in wrapper.messageType {
                     guard let handler = consumers[messageType] else {
                         continue
                     }
 
                     // If there is a matching type, try to process it
-                    logger.debug("Message type associated for queue \(queueName): \(messageType)")
+                    logger.trace("Message type associated for queue \(queueName): \(messageType)")
                     try handler.handleMessage(buffer: buffer)
                     handled = true
                 }
 
                 // If the message is not handled, print an error
                 if !handled {
-                    logger.debug(
+                    logger.error(
                         "Message of type(s) \(wrapper.messageType) from queue \(queueName) is missing a consumer!"
                     )
 
                     // TODO: This message should then be routed to a different error or unhandled queue
                 }
+            } catch {
+                logger.error("Error in message consumed from \(queueName): \(error)")
+
+                // TODO: We should route this to an error queue
             }
         }
     }

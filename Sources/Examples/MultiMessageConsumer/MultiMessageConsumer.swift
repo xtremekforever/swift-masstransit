@@ -12,6 +12,9 @@ struct MultiMessageConsumer: AsyncParsableCommand {
     @Option
     var rabbitUrl: String = "amqp://guest:guest@localhost/%2F"
 
+    @Option
+    var logLevel: String = "info"
+
     struct Event1: MassTransitMessage {
         let date: Date
         let value: String
@@ -22,8 +25,15 @@ struct MultiMessageConsumer: AsyncParsableCommand {
         let value: Int
     }
 
+    // Customizable log level
+    func createLogger() -> Logger {
+        var logger = Logger(label: "MultiMessageConsumer")
+        logger.logLevel = Logger.Level(rawValue: logLevel) ?? .info
+        return logger
+    }
+
     mutating func run() async throws {
-        let logger = Logger(label: "MultiMessageConsumer")
+        let logger = createLogger()
         let rabbitMq = RetryingConnection(rabbitUrl, logger: logger)
         let massTransit = MassTransit(rabbitMq, logger: logger)
         let consumer = MassTransitConsumer(
@@ -33,7 +43,7 @@ struct MultiMessageConsumer: AsyncParsableCommand {
         )
 
         // These options are to be used by the publisher and consumer for the message exchanges
-        let exchangeOptions = ExchangeOptions(type: .direct, durable: true, autoDelete: true)
+        let exchangeOptions = ExchangeOptions(durable: true, autoDelete: true)
 
         try await withThrowingDiscardingTaskGroup { group in
             // Supervise RabbitMq connection
