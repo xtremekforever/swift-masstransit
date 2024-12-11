@@ -51,21 +51,29 @@ public actor MassTransitConsumer {
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         messageExchange: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
         routingKey: String = "",
+        bindingOptions: BindingOptions = .init(),
         customMessageType: String? = nil
     ) async throws -> AsyncStream<T> {
         // Determine message type
         let messageType = customMessageType ?? messageExchange
 
-        while await !connection.isConnected && !Task.isCancelledOrShuttingDown {
-            await connection.waitForConnection(timeout: retryInterval)
-        }
+        // If we need to use a messageExchange, we want to declare and bind it here
+        if !messageExchange.isEmpty {
+            while await !connection.isConnected && !Task.isCancelledOrShuttingDown {
+                await connection.waitForConnection(timeout: retryInterval)
+            }
+            let channel = try await connection.getChannel()
 
-        // Bind messageExchange to consumer exchange
-        logger.debug("Binding exchange \(messageExchange) to \(exchangeName) with routing key: \(routingKey)")
-        try await connection.getChannel()?.exchangeBind(
-            destination: exchangeName, source: messageExchange, routingKey: routingKey
-        )
+            // Bind messageExchange to consumer exchange
+            try await channel?.exchangeDeclare(messageExchange, exchangeOptions, logger)
+
+            // Bind messageExchange to consumer exchange
+            try await channel?.exchangeBind(
+                exchangeName, messageExchange, routingKey, bindingOptions, logger
+            )
+        }
 
         // Create a stream and message handler
         let urn = urn(from: messageType)

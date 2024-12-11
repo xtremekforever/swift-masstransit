@@ -1,12 +1,13 @@
 {
+  "originHash" : "1b54b56ddcea181d65b72244567b45dab9dc19d09d3cdd0f7c48c08dc190d584",
   "pins" : [
     {
       "identity" : "rabbitmq-nio",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/funcmike/rabbitmq-nio",
       "state" : {
-        "revision" : "cb9c294fda00f57db116abd297df21d078b5d027",
-        "version" : "0.1.0-beta4"
+        "branch" : "main",
+        "revision" : "b7df1f750ee008f861792c10f8509388a82a314d"
       }
     },
     {
@@ -16,6 +17,15 @@
       "state" : {
         "revision" : "2543679282aa6f6c8ecf2138acd613ed20790bc2",
         "version" : "0.1.0"
+      }
+    },
+    {
+      "identity" : "swift-argument-parser",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/apple/swift-argument-parser.git",
+      "state" : {
+        "revision" : "41982a3656a71c768319979febd796c6fd111d5c",
+        "version" : "1.5.0"
       }
     },
     {
@@ -96,7 +106,7 @@
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
         "branch" : "main",
-        "revision" : "117a75002cad59dbd3d67c3426441892a774a88e"
+        "revision" : "42a737308e5b4b82b868eb3f0d7dc2a55ee7c3ab"
       }
     },
     {
@@ -127,5 +137,5 @@
       }
     }
   ],
-  "version" : 2
+  "version" : 3
 }
