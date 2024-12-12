@@ -1,13 +1,13 @@
 {
-  "originHash" : "1b54b56ddcea181d65b72244567b45dab9dc19d09d3cdd0f7c48c08dc190d584",
+  "originHash" : "5b4bec220abe74b18ec19339d6c6e526aae225a463af0401d93406b8b609de96",
   "pins" : [
     {
       "identity" : "rabbitmq-nio",
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/funcmike/rabbitmq-nio",
       "state" : {
-        "branch" : "main",
-        "revision" : "b7df1f750ee008f861792c10f8509388a82a314d"
+        "revision" : "cb9c294fda00f57db116abd297df21d078b5d027",
+        "version" : "0.1.0-beta4"
       }
     },
     {
@@ -105,8 +105,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "main",
-        "revision" : "42a737308e5b4b82b868eb3f0d7dc2a55ee7c3ab"
+        "revision" : "b3d45e15802ddb9d87da01ddd4fd87d9b85e9e08",
+        "version" : "0.2.1"
       }
     },
     {
