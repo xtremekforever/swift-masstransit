@@ -10,8 +10,10 @@ public actor MassTransitConsumer {
     let configuration: MassTransitConsumerConfiguration
     let routingKey: String
     let retryInterval: Duration
+    let onConsumerReady: (@Sendable () async throws -> Void)?
     let logger: Logger
 
+    private(set) public var isConsumerReady = false
     private var consumers: [String: (ByteBuffer) throws -> Void] = [:]
 
     public init(
@@ -21,6 +23,7 @@ public actor MassTransitConsumer {
         routingKey: String = "",
         configuration: MassTransitConsumerConfiguration = .init(),
         retryInterval: Duration = MassTransit.defaultRetryInterval,
+        onConsumerReady: (@Sendable () async throws -> Void)? = nil,
         logger: Logger = .init(label: .init(describing: MassTransitConsumer.self))
     ) {
         self.connection = connection
@@ -29,6 +32,7 @@ public actor MassTransitConsumer {
         self.routingKey = routingKey
         self.configuration = configuration
         self.retryInterval = retryInterval
+        self.onConsumerReady = onConsumerReady
         self.logger = logger
     }
 
@@ -71,7 +75,7 @@ public actor MassTransitConsumer {
         _ bindingOptions: BindingOptions
     ) async throws {
         // TODO: Retry pattern here
-        while await !connection.isConnected && !Task.isCancelledOrShuttingDown {
+        while (await !connection.isConnected || !isConsumerReady) && !Task.isCancelledOrShuttingDown {
             await connection.waitForConnection(timeout: retryInterval)
         }
         let channel = try await connection.getChannel()
@@ -140,6 +144,8 @@ public actor MassTransitConsumer {
         logger.info("Starting consumer on queue \(queueName)...")
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
+        try await onConsumerReady?()
+        isConsumerReady = true
 
         // Consume messages from the consumer
         for await buffer in consumeStream {
