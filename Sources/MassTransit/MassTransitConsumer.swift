@@ -45,15 +45,14 @@ public actor MassTransitConsumer {
         let (stream, continuation) = AsyncStream.makeStream(of: MassTransitWrapper<T>.self)
 
         // Create a message handler
-        let urn = urn(from: messageType)
-        consumers[urn] = { buffer in
+        consumers[messageType] = { buffer in
             let wrapper = try MassTransitWrapper(T.self, from: buffer)
             continuation.yield(wrapper)
         }
 
         // Handle termination
         continuation.onTermination = { _ in
-            Task { await self.removeConsumer(messageType: urn) }
+            Task { await self.removeConsumer(messageType: messageType) }
         }
 
         return .init(
@@ -66,7 +65,7 @@ public actor MassTransitConsumer {
 
     private func removeConsumer(messageType: String) {
         logger.debug("Removing consumer \(messageType) for \(queueName)...")
-        consumers.removeValue(forKey: messageType)
+        consumers.removeValue(forKey: urn(from: messageType))
     }
 
     private func bindMessageExchange(
@@ -187,7 +186,7 @@ public actor MassTransitConsumer {
                 let wrapper = try MassTransitWrapper(Wrapper.self, from: buffer)
 
                 // Looking for matching consumers
-                for messageType in wrapper.messageType {
+                for messageType in wrapper.messageType.map({ $0.replacingOccurrences(of: "urn:message:", with: "") }) {
                     guard let handler = consumers[messageType] else {
                         continue
                     }
