@@ -15,9 +15,10 @@ public struct RequestContext<T: MassTransitMessage>: Sendable {
 extension RequestContext {
     public func respond<TResponse: MassTransitMessage>(
         _ value: TResponse,
-        exchangeName: String = String(describing: TResponse.self),
         routingKey: String = "",
-        configuration: MassTransitPublisherConfiguration = .init(),
+        configuration: MassTransitPublisherConfiguration = .init(
+            exchangeOptions: .init(type: .fanout, autoDelete: true)
+        ),
         customMessageType: String? = nil,
         retryInterval: Duration = MassTransit.defaultRetryInterval
     ) async throws {
@@ -27,7 +28,7 @@ extension RequestContext {
         else {
             throw MassTransitError.invalidContext
         }
-        let messageType = customMessageType ?? exchangeName
+        let messageType = customMessageType ?? String(describing: TResponse.self)
 
         // Create MassTransitWrapper to send the response
         let response = MassTransitWrapper(
@@ -41,12 +42,10 @@ extension RequestContext {
 
         // Encode to JSON
         let messageJson = try response.jsonEncode()
-        #if DEBUG
-            logger.trace("Message JSON to respond: \(String(buffer: messageJson))")
-        #endif
+        logger.trace("Message JSON to respond: \(String(buffer: messageJson))")
 
         // Publisher is used to send the response
-        let publisher = configuration.createPublisher(using: connection, exchangeName)
+        let publisher = configuration.createPublisher(using: connection, responseExchange)
         try await withSpan("\(messageType) response", ofKind: .producer) { span in
             span.attributes.messaging.messageID = response.messageId
             span.attributes.messaging.destination = responseExchange
