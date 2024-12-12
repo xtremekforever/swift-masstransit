@@ -3,10 +3,6 @@ import NIOCore
 import RabbitMq
 import Tracing
 
-protocol MessageConsumerHandler {
-    func handleMessage(buffer: ByteBuffer) throws
-}
-
 public actor MassTransitConsumer {
     let connection: Connection
     let queueName: String
@@ -16,19 +12,7 @@ public actor MassTransitConsumer {
     let retryInterval: Duration
     let logger: Logger
 
-    private var consumers: [String: MessageConsumerHandler] = [:]
-
-    private struct MessageHandler<T: MassTransitMessage>: MessageConsumerHandler {
-        let queueName: String
-        let continuation: AsyncStream<T>.Continuation
-        let logger: Logger
-
-        func handleMessage(buffer: ByteBuffer) throws {
-            let wrapper = try MassTransitWrapper(T.self, from: buffer)
-            logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
-            continuation.yield(wrapper.message)
-        }
-    }
+    private var consumers: [String: (ByteBuffer) throws -> Void] = [:]
 
     public init(
         using connection: Connection,
@@ -48,9 +32,58 @@ public actor MassTransitConsumer {
         self.logger = logger
     }
 
+    private func createMessageConsumer<T: MassTransitMessage>(
+        _: T.Type, messageType: String
+    ) -> AnyAsyncSequence<MassTransitWrapper<T>> {
+        // Create a stream + continuation
+        logger.info("Consuming messages of type \(messageType) on queue \(queueName)...")
+        let (stream, continuation) = AsyncStream.makeStream(of: MassTransitWrapper<T>.self)
+
+        // Create a message handler
+        let urn = urn(from: messageType)
+        consumers[urn] = { buffer in
+            let wrapper = try MassTransitWrapper(T.self, from: buffer)
+            continuation.yield(wrapper)
+        }
+
+        // Handle termination
+        continuation.onTermination = { _ in
+            Task { await self.removeConsumer(messageType: urn) }
+        }
+
+        return .init(
+            stream.compactMap { wrapper in
+                self.logger.trace("Decoded buffer from \(self.queueName) to wrapper: \(wrapper)")
+                self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
+                return wrapper
+            }
+        )
+    }
+
     private func removeConsumer(messageType: String) {
         logger.debug("Removing consumer \(messageType) for \(queueName)...")
         consumers.removeValue(forKey: messageType)
+    }
+
+    private func bindMessageExchange(
+        _ messageExchange: String,
+        _ exchangeOptions: ExchangeOptions,
+        _ routingKey: String,
+        _ bindingOptions: BindingOptions
+    ) async throws {
+        // TODO: Retry pattern here
+        while await !connection.isConnected && !Task.isCancelledOrShuttingDown {
+            await connection.waitForConnection(timeout: retryInterval)
+        }
+        let channel = try await connection.getChannel()
+
+        // Bind messageExchange to consumer exchange
+        try await channel?.exchangeDeclare(messageExchange, exchangeOptions, logger)
+
+        // Bind messageExchange to consumer exchange
+        try await channel?.exchangeBind(
+            exchangeName, messageExchange, routingKey, bindingOptions, logger
+        )
     }
 
     public func consume<T: MassTransitMessage>(
@@ -60,38 +93,48 @@ public actor MassTransitConsumer {
         routingKey: String = "",
         bindingOptions: BindingOptions = .init(),
         customMessageType: String? = nil
-    ) async throws -> AsyncStream<T> {
+    ) async throws -> AnyAsyncSequence<T> {
         // Determine message type
         let messageType = customMessageType ?? messageExchange
 
-        // If we need to use a messageExchange, we want to declare and bind it here
-        if !messageExchange.isEmpty {
-            while await !connection.isConnected && !Task.isCancelledOrShuttingDown {
-                await connection.waitForConnection(timeout: retryInterval)
-            }
-            let channel = try await connection.getChannel()
-
-            // Bind messageExchange to consumer exchange
-            try await channel?.exchangeDeclare(messageExchange, exchangeOptions, logger)
-
-            // Bind messageExchange to consumer exchange
-            try await channel?.exchangeBind(
-                exchangeName, messageExchange, routingKey, bindingOptions, logger
-            )
-        }
+        // We need to declare & bind an exchange for this message
+        try await bindMessageExchange(messageExchange, exchangeOptions, routingKey, bindingOptions)
 
         // Create a stream and message handler
-        let urn = urn(from: messageType)
-        logger.info("Consuming messages of type \(messageType) on queue \(queueName)...")
-        let (stream, continuation) = AsyncStream.makeStream(of: T.self)
-        consumers[urn] = MessageHandler(queueName: queueName, continuation: continuation, logger: logger)
+        let consumerStream = createMessageConsumer(T.self, messageType: messageType)
 
-        // Handle termination
-        continuation.onTermination = { _ in
-            Task { await self.removeConsumer(messageType: urn) }
-        }
+        return .init(consumerStream.compactMap { $0.message })
+    }
 
-        return stream
+    public func consumeWithContext<T: MassTransitMessage>(
+        _: T.Type,
+        messageExchange: String = String(describing: T.self),
+        exchangeOptions: ExchangeOptions = .massTransitDefaults,
+        routingKey: String = "",
+        bindingOptions: BindingOptions = .init(),
+        customMessageType: String? = nil
+    ) async throws -> AnyAsyncSequence<RequestContext<T>> {
+        // Determine message type
+        let messageType = customMessageType ?? messageExchange
+
+        // We need to declare & bind an exchange for this message
+        try await bindMessageExchange(messageExchange, exchangeOptions, routingKey, bindingOptions)
+
+        // Create a stream and message handler
+        let consumerStream = createMessageConsumer(T.self, messageType: messageType)
+
+        return .init(
+            consumerStream.compactMap { wrapper in
+                // Create RequestContext from message
+                return RequestContext(
+                    connection: self.connection,
+                    requestId: wrapper.requestId,
+                    responseAddress: wrapper.responseAddress,
+                    logger: self.logger,
+                    message: wrapper.message
+                )
+            }
+        )
     }
 
     public func run() async throws {
@@ -122,7 +165,7 @@ public actor MassTransitConsumer {
 
                     // If there is a matching type, try to process it
                     logger.trace("Message type associated for queue \(queueName): \(messageType)")
-                    try handler.handleMessage(buffer: buffer)
+                    try handler(buffer)
                     handled = true
                 }
 

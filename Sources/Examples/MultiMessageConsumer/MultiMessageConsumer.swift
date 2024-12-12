@@ -36,14 +36,15 @@ struct MultiMessageConsumer: AsyncParsableCommand {
         let logger = createLogger()
         let rabbitMq = RetryingConnection(rabbitUrl, logger: logger)
         let massTransit = MassTransit(rabbitMq, logger: logger)
-        let consumer = MassTransitConsumer(
-            using: rabbitMq, queueName: "MultiMessageConsumer", exchangeName: "MultiMessageExchange",
-            configuration: .init(exchangeOptions: .init(autoDelete: true)),
-            logger: logger
-        )
 
         // These options are to be used by the publisher and consumer for the message exchanges
-        let exchangeOptions = ExchangeOptions(durable: true, autoDelete: true)
+        let exchangeOptions = ExchangeOptions(durable: false, autoDelete: true)
+
+        let consumer = MassTransitConsumer(
+            using: rabbitMq, queueName: "MultiMessageConsumer", exchangeName: "MultiMessageExchange",
+            configuration: .init(exchangeOptions: exchangeOptions),
+            logger: logger
+        )
 
         try await withThrowingDiscardingTaskGroup { group in
             // Supervise RabbitMq connection
