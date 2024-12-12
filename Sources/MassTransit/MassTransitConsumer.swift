@@ -129,7 +129,11 @@ public actor MassTransitConsumer {
         // Create a stream and message handler
         let consumerStream = createMessageConsumer(T.self, messageType: messageType)
 
-        return .init(consumerStream.compactMap { $0.message })
+        return .init(
+            consumerStream.compactMap { wrapper in
+                self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
+                return wrapper.message
+            })
     }
 
     public func consumeWithContext<T: MassTransitMessage>(
@@ -151,6 +155,8 @@ public actor MassTransitConsumer {
 
         return .init(
             consumerStream.compactMap { wrapper in
+                self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
+
                 // Create RequestContext from message
                 return RequestContext(
                     connection: self.connection,
