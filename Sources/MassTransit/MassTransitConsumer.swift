@@ -54,7 +54,6 @@ public actor MassTransitConsumer {
         return .init(
             stream.compactMap { wrapper in
                 self.logger.trace("Decoded buffer from \(self.queueName) to wrapper: \(wrapper)")
-                self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
                 return wrapper
             }
         )

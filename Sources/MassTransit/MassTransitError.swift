@@ -5,5 +5,5 @@ public enum MassTransitError: Error {
     case brokerTimeout
     case decodingError(data: String, type: MassTransitMessage.Type)
     case encodingError(message: MassTransitMessage)
-    case invalidContext
+    case invalidContext(responseAddress: String?)
 }
