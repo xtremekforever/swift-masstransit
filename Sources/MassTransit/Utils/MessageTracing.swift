@@ -33,11 +33,11 @@ func withConsumeSpan<T>(
     _ queueName: String,
     _ consumeKind: ConsumeKind,
     _ routingKey: String,
-    _ body: (any Span) throws -> T
-) throws -> T {
-    return try withSpan("\(queueName) \(consumeKind)", ofKind: .consumer) { span in
+    _ body: (any Span) -> T
+) -> T {
+    return withSpan("\(queueName) \(consumeKind)", ofKind: .consumer) { span in
         span.attributes.messaging.system = "rabbitmq"
         span.attributes.messaging.rabbitMQ.routingKey = routingKey
-        return try body(span)
+        return body(span)
     }
 }

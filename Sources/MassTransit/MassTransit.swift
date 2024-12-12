@@ -83,7 +83,7 @@ public struct MassTransit: Sendable {
     ) throws -> MassTransitWrapper<T>? {
         logger.trace("Consumed buffer from \(queueName): \(String(buffer: buffer))")
 
-        return try withConsumeSpan(queueName, consumeKind, routingKey) { span in
+        return withConsumeSpan(queueName, consumeKind, routingKey) { span in
             do {
                 let wrapper = try MassTransitWrapper(T.self, from: buffer)
                 logger.trace("Decoded buffer from \(queueName) to wrapper: \(wrapper)")

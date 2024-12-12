@@ -1,3 +1,4 @@
+import AMQPClient
 import Logging
 import NIOCore
 import RabbitMq
@@ -74,19 +75,42 @@ public actor MassTransitConsumer {
         _ routingKey: String,
         _ bindingOptions: BindingOptions
     ) async throws {
-        // TODO: Retry pattern here
-        while (await !connection.isConnected || !isConsumerReady) && !Task.isCancelledOrShuttingDown {
-            await connection.waitForConnection(timeout: retryInterval)
+        var firstAttempt = true
+
+        while !Task.isCancelledOrShuttingDown {
+            do {
+                guard let channel = try await connection.getChannel() else {
+                    throw AMQPConnectionError.connectionClosed(replyCode: nil, replyText: nil)
+                }
+
+                // Declare messageExchange using options
+                try await channel.exchangeDeclare(messageExchange, exchangeOptions, logger)
+
+                // Bind messageExchange to main exchange for this consumer
+                try await channel.exchangeBind(
+                    exchangeName, messageExchange, routingKey, bindingOptions, logger
+                )
+
+                return
+            } catch AMQPConnectionError.connectionClosed(_, _) {
+                if !firstAttempt {
+                    logger.error(
+                        "Connection closed while setting up message binding \(messageExchange)"
+                    )
+                }
+
+                // Wait for connection, timeout after retryInterval
+                await connection.waitForConnection(timeout: retryInterval)
+
+                firstAttempt = false
+            } catch {
+                logger.error("Error setting up message binding \(messageExchange): \(error)")
+
+                // Consume retry
+                logger.debug("Will retry setting up \(messageExchange) in \(retryInterval)")
+                try await Task.sleep(for: retryInterval)
+            }
         }
-        let channel = try await connection.getChannel()
-
-        // Bind messageExchange to consumer exchange
-        try await channel?.exchangeDeclare(messageExchange, exchangeOptions, logger)
-
-        // Bind messageExchange to consumer exchange
-        try await channel?.exchangeBind(
-            exchangeName, messageExchange, routingKey, bindingOptions, logger
-        )
     }
 
     public func consume<T: MassTransitMessage>(
@@ -154,7 +178,7 @@ public actor MassTransitConsumer {
     }
 
     private func process(_ buffer: ByteBuffer) {
-        withSpan("\(queueName) consume", ofKind: .consumer) { span in
+        withConsumeSpan(self.queueName, .consume, self.routingKey) { span in
             logger.trace("Consumed buffer from \(queueName): \(String(buffer: buffer))")
             var handled = false
 
