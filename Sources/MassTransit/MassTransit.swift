@@ -250,7 +250,7 @@ public struct MassTransit: Sendable {
     /// - Throws:
     ///     - 'MassTransitError.timeout' if no response is received within the timeout.
     ///     - `CancellationError()` if the task is cancelled while publishing, consuming, or waiting for a response.
-    /// - Returns: 
+    /// - Returns: Message of type `TResponse` if it is received successfully.
     public func request<T: MassTransitMessage, TResponse: MassTransitMessage>(
         _ value: T,
         _: TResponse.Type,
