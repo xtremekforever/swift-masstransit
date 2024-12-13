@@ -1,4 +1,4 @@
-import AsyncAlgorithms
+import Tracing
 
 func randomString(length: Int) -> String {
     let letters = "abcdefghijklmnopqrstuvwxyz0123456789"

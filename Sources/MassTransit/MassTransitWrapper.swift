@@ -14,6 +14,10 @@ struct MassTransitWrapper<T: MassTransitMessage>: MassTransitMessage {
     var message: T
 }
 
+func urn(from messageType: String) -> String {
+    "urn:message:\(messageType)"
+}
+
 extension MassTransitWrapper {
     init(_: T.Type, from buffer: ByteBuffer) throws {
         // Decode from JSON
@@ -21,7 +25,7 @@ extension MassTransitWrapper {
         decoder.dateDecodingStrategy = .iso8601
         guard let wrapper = try? decoder.decode(Self.self, from: buffer)
         else {
-            throw MassTransitError.parsingError
+            throw MassTransitError.decodingError(data: String(buffer: buffer), type: T.self)
         }
         self = wrapper
     }
@@ -33,21 +37,24 @@ extension MassTransitWrapper {
         encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
         guard let json = try? encoder.encodeAsByteBuffer(self, allocator: .init())
         else {
-            throw MassTransitError.parsingError
+            throw MassTransitError.encodingError(message: message)
         }
 
         return json
     }
 
     static func create<TMessage: MassTransitMessage>(
-        using value: TMessage, urn: String
+        using value: TMessage, messageType: String
     ) -> MassTransitWrapper<TMessage> {
-        assert(!urn.isEmpty)
+        assert(!messageType.isEmpty)
 
         return .init(
             messageId: UUID().uuidString,
-            messageType: ["urn:message:\(urn)"],
+            messageType: [urn(from: messageType)],
             message: value
         )
     }
 }
+
+/// Useful for parsing just the MassTransitWrapper while ignoring message content.
+struct Wrapper: MassTransitMessage {}

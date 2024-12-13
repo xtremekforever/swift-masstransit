@@ -15,9 +15,10 @@ let package = Package(
             targets: ["MassTransit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "main"),
+        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", from: "0.2.1"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.48.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing-extras.git", from: "1.0.0-beta.1"),
+        .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.0"),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -43,6 +44,14 @@ let package = Package(
                 "MassTransit"
             ],
             path: "Sources/Examples/RequestResponse"
+        ),
+        .executableTarget(
+            name: "MultiMessageConsumer",
+            dependencies: [
+                "MassTransit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
+            ],
+            path: "Sources/Examples/MultiMessageConsumer"
         ),
     ]
 )
