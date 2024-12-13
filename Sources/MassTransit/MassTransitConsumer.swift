@@ -2,9 +2,14 @@ import AMQPClient
 import Logging
 import NIOCore
 import RabbitMq
+import ServiceLifecycle
 import Tracing
 
-public actor MassTransitConsumer {
+/// MassTransit Consumer, which can take one or more message types.
+///
+/// This implements the definition of a MassTransit Consumer which can receive one or more
+/// message types from a single RabbitMq consumer and queue.
+public actor MassTransitConsumer: Service {
     let connection: Connection
     let queueName: String
     let exchangeName: String
@@ -17,6 +22,17 @@ public actor MassTransitConsumer {
     private(set) public var isConsumerReady = false
     private var consumers: [String: (ByteBuffer) throws -> Void] = [:]
 
+    /// Create the MassTransit Consumer.
+    ///
+    /// - Parameters:
+    ///   - connection: RabbitMq `Connection` to use for this consumer.
+    ///   - queueName: The queue name to use for this consumer. Example: "MyAwesomeConsumer"
+    ///   - exchangeName: The exchange name to use for this consumer: Example: "MyAwesomeConsumer"
+    ///   - routingKey: An optional routing key to use for routing from the exchange to the queue.
+    ///   - configuration: Configuration for the consumer, which includes queue, exchange, and consumer options.
+    ///   - retryInterval: The retry interval to use if unable to declare, bind, or consume. This will retry forever unless cancelled.
+    ///   - onConsumerReady: Callback that is called once the RabbitMq consumer is "ready" (actually consuming events).
+    ///   - logger: The logger to use for this instance.
     public init(
         using connection: Connection,
         queueName: String,
@@ -112,6 +128,22 @@ public actor MassTransitConsumer {
         }
     }
 
+    /// Consume a specific message type from this consumer.
+    ///
+    /// This method adds a consumer for a specific message type and returns a stream of messages of
+    /// that type when they are received and parsed. The message type determined by the
+    /// `messageExchange` by default, or can be overridden by the `customMessageType` parameter.
+    ///
+    /// - Parameters:
+    ///   - _: Type of the message to consume (example: `MyMessage.self`).
+    ///   - messageExchange: The exchange name to use for this message. Defaults to the message type string but can be set to any custom value.
+    ///   - exchangeOptions: Options for the message exchange. Defaults to `.massTransitDefaults` but can be customized as desired.
+    ///   - routingKey: Optional routing key to use for the binding from the message exchange to the main consumer exchange.
+    ///   - bindingOptions: Options for binding the message exchange to the main consumer exchange.
+    ///   - customMessageType: Custom message type to use. This will not affect the message exchange name,
+    ///     only the message type "urn" that is interpreted in the MassTransit wrapper.
+    /// - Throws: `CancellationError()` if the task is cancelled when consuming or performing retries.
+    /// - Returns: An `AnyAsyncSequence<T>`, which is essentially a stream of messages of the requested type from the consumer.
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         messageExchange: String = String(describing: T.self),
@@ -133,9 +165,25 @@ public actor MassTransitConsumer {
             consumerStream.compactMap { wrapper in
                 self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
                 return wrapper.message
-            })
+            }
+        )
     }
 
+    /// Consume a specific message type from this consumer with attached `RequestContext`.
+    ///
+    /// This works the same as the regular `consume()` method, but returns a `RequestContext` for
+    /// each message that can be used to `.respond` to the message that was received by the application.
+    ///
+    /// - Parameters:
+    ///   - _: Type of the message to consume (example: `MyMessage.self`).
+    ///   - messageExchange: The exchange name to use for this message. Defaults to the message type string but can be set to any custom value.
+    ///   - exchangeOptions: Options for the message exchange. Defaults to `.massTransitDefaults` but can be customized as desired.
+    ///   - routingKey: Optional routing key to use for the binding from the message exchange to the main consumer exchange.
+    ///   - bindingOptions: Options for binding the message exchange to the main consumer exchange.
+    ///   - customMessageType: Custom message type to use. This will not affect the message exchange name,
+    ///     only the message type "urn" that is interpreted in the MassTransit wrapper.
+    /// - Throws: `CancellationError()` if the task is cancelled when consuming or performing retries.
+    /// - Returns: An `AnyAsyncSequence<RequestContext<T>>`, which is a stream of `RequestContext` containing the message received the consumer.
     public func consumeWithContext<T: MassTransitMessage>(
         _: T.Type,
         messageExchange: String = String(describing: T.self),
@@ -169,6 +217,11 @@ public actor MassTransitConsumer {
         )
     }
 
+    /// Run the consumer.
+    ///
+    /// This is *REQUIRED* to run the RabbitMq consumer and process messages from the resulting
+    /// stream. The message type in each message is checked and attempted to be routed to a different
+    /// MassTransit consumer, otherwise an error is printed that an unknown message type was received.
     public func run() async throws {
         logger.info("Starting consumer on queue \(queueName)...")
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
