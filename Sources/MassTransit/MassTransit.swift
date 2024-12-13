@@ -6,13 +6,25 @@ import RabbitMq
 import Tracing
 import TracingOpenTelemetrySemanticConventions
 
+/// Create the MassTransit connection wrapper.
+/// 
+/// This is a simple wrapper around a RabbitMq `Connection` that provides MassTransit functions such
+/// as send, publish, consume, and request/response. This provides the simplest possible functionality
+/// for compatibility with the C# MassTransit library while making the API simple to use.
 public struct MassTransit: Sendable {
+    /// Default retry interval for `send`/`publish`/`consume`.
     public static let defaultRetryInterval = Duration.seconds(30)
+    /// Default response timeout for a `request` message.
     public static let defaultRequestTimeout = Duration.seconds(30)
 
     private let connection: Connection
     private let logger: Logger
 
+    /// Create the MassTransit connection wrapper.
+    /// 
+    /// - Parameters:
+    ///   - connection: A RabbitMq `Connection` that should be connected to the broker and managed externally.
+    ///   - logger: Logger to use for this instance.
     public init(
         _ connection: Connection,
         logger: Logger = Logger(label: "\(MassTransit.self)")
@@ -21,6 +33,19 @@ public struct MassTransit: Sendable {
         self.logger = logger
     }
 
+    /// Send a message to the broker on a given exchange.
+    /// 
+    /// This provides similar functionality to `publish`, but does not retry on failure, which is
+    /// useful for applications that need to send a message without blocking on failure.
+    ///
+    /// - Parameters:
+    ///   - value: The `MassTransitMessage`-conforming message to send.
+    ///   - exchangeName: The name of the exchange to publish to. Defaults to the name of the message.
+    ///   - routingKey: Optional routing key to use to publish to the exchange.
+    ///   - configuration: Configuration to use for publishing, which contains exchange and publisher options.
+    ///   - customMessageType: Custom message type to use. This will not affect the exchange name,
+    ///     only the message type "urn" that is sent in the MassTransit message wrapper.
+    /// - Throws: Error if unable to send the message.
     public func send<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = String(describing: T.self),
@@ -47,6 +72,19 @@ public struct MassTransit: Sendable {
         }
     }
 
+    /// Publish a message to the broker on a given exchange.
+    /// 
+    /// This method will block until it is able to publish or is cancelled.
+    /// 
+    /// - Parameters:
+    ///   - value: The `MassTransitMessage`-conforming message to send.
+    ///   - exchangeName: The name of the exchange to publish to. Defaults to the name of the message.
+    ///   - routingKey: Optional routing key to use to publish to the exchange.
+    ///   - configuration: Configuration to use for publishing, which contains exchange and publisher options.
+    ///   - customMessageType: Custom message type to use. This will not affect the exchange name,
+    ///     only the message type "urn" that is sent in the MassTransit message wrapper.
+    ///   - retryInterval: The retry interval to use if unable to publish. This will retry forever unless cancelled.
+    /// - Throws: `CancellationError()` if the task is cancelled when publishing or retrying.
     public func publish<T: MassTransitMessage>(
         _ value: T,
         exchangeName: String = String(describing: T.self),
@@ -99,6 +137,20 @@ public struct MassTransit: Sendable {
         }
     }
 
+    /// Consume a stream of a message type from a given queue bound to an exchange.
+    /// 
+    /// This method will block until it is able to consume or is cancelled.
+    /// 
+    /// - Parameters:
+    ///   - _: The `MassTransitMessage`-conforming message to consume.
+    ///   - queueName: The name of the queue for this consumer. Defaults to the message type + "-Consumer".
+    ///   - exchangeName: The name of the exchange to bind to the queue. Defaults to the name of the message.
+    ///   - routingKey: Optional routing key to use for binding the exchange to the queue.
+    ///   - configuration: Configuration to use for consuming, which contains queue, exchange, and consumer options.
+    ///   - customMessageType: Custom message type to use. This will not affect the exchange name.
+    ///   - retryInterval: The retry interval to use if unable to consume. This will retry forever unless cancelled.
+    /// - Throws: `CancellationError()` if the task is cancelled when consuming or retrying.
+    /// - Returns: An `AnyAsyncSequence<T>`, which is essentially a stream of messages of the requested type from the consumer.
     public func consume<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
@@ -128,6 +180,21 @@ public struct MassTransit: Sendable {
         )
     }
 
+    /// Consume a stream of `RequestContext` for a specific message type.
+    /// 
+    /// This is the same as the regular `consume()` method, but adds a `RequestContext` wrapper that
+    /// allows the application to `.respond()` to the requests that may come in.
+    /// 
+    /// - Parameters:
+    ///   - _: The `MassTransitMessage`-conforming message to consume.
+    ///   - queueName: The name of the queue for this consumer. Defaults to the message type + "-Consumer".
+    ///   - exchangeName: The name of the exchange to bind to the queue. Defaults to the name of the message.
+    ///   - routingKey: Optional routing key to use for binding the exchange to the queue.
+    ///   - configuration: Configuration to use for consuming, which contains queue, exchange, and consumer options.
+    ///   - customMessageType: Custom message type to use. This will not affect the exchange name.
+    ///   - retryInterval: The retry interval to use if unable to consume. This will retry forever unless cancelled.
+    /// - Throws: `CancellationError()` if the task is cancelled when consuming or retrying.
+    /// - Returns: An `AnyAsyncSequence<RequestContext<T>>`, which is a stream of `RequestContext` containing the message received the consumer.
     public func consumeWithContext<T: MassTransitMessage>(
         _: T.Type,
         queueName: String = "\(String(describing: T.self))-Consumer",
@@ -166,6 +233,24 @@ public struct MassTransit: Sendable {
         )
     }
 
+    /// Perform a request using a specific message type, expecting another message type as a response.
+    /// 
+    /// This method implements the most basic subset of the C# MassTransit library's Request/Response
+    /// functionality by publishing a request, then awaiting a response on a specific exchange.
+    /// 
+    /// - Parameters:
+    ///   - value: The `MassTransitMessage`-conforming request to publish.
+    ///   - _: The type of the `MassTransitMessage`-conforming response we expect.
+    ///   - exchangeName: The name of the exchange to publish the request to.
+    ///   - routingKey: Optional routing key to use for the request.
+    ///   - timeout: Timeout for the response to the request to arrive.
+    ///   - configuration: Configuration to use for the publisher, which contains exchange and publisher options.
+    ///   - customMessageType: Custom message type to use. This will not affect the exchange name,
+    ///     only the message type "urn" that is sent in the MassTransit message wrapper.
+    /// - Throws:
+    ///     - 'MassTransitError.timeout' if no response is received within the timeout.
+    ///     - `CancellationError()` if the task is cancelled while publishing, consuming, or waiting for a response.
+    /// - Returns: 
     public func request<T: MassTransitMessage, TResponse: MassTransitMessage>(
         _ value: T,
         _: TResponse.Type,
