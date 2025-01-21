@@ -34,7 +34,7 @@ extension MassTransitWrapper {
         // Encode to JSON
         let encoder = JSONEncoder()
         encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes]
+        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
         guard let json = try? encoder.encodeAsByteBuffer(self, allocator: .init())
         else {
             throw MassTransitError.encodingError(message: message)
