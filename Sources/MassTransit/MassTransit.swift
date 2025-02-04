@@ -7,7 +7,7 @@ import Tracing
 import TracingOpenTelemetrySemanticConventions
 
 /// Create the MassTransit connection wrapper.
-/// 
+///
 /// This is a simple wrapper around a RabbitMq `Connection` that provides MassTransit functions such
 /// as send, publish, consume, and request/response. This provides the simplest possible functionality
 /// for compatibility with the C# MassTransit library while making the API simple to use.
@@ -21,7 +21,7 @@ public struct MassTransit: Sendable {
     private let logger: Logger
 
     /// Create the MassTransit connection wrapper.
-    /// 
+    ///
     /// - Parameters:
     ///   - connection: A RabbitMq `Connection` that should be connected to the broker and managed externally.
     ///   - logger: Logger to use for this instance.
@@ -34,7 +34,7 @@ public struct MassTransit: Sendable {
     }
 
     /// Send a message to the broker on a given exchange.
-    /// 
+    ///
     /// This provides similar functionality to `publish`, but does not retry on failure, which is
     /// useful for applications that need to send a message without blocking on failure.
     ///
@@ -68,14 +68,14 @@ public struct MassTransit: Sendable {
         logger.debug("Sending message of type \(messageType) on exchange \(exchangeName)...")
         try await withPublishSpan(wrapper.messageId, messageType, .send, exchangeName, routingKey) {
             try await publisher.publish(messageJson, routingKey: routingKey)
-            logger.debug("Sent message \(value) to exchange \(exchangeName)")
+            logger.trace("Sent message \(value) to exchange \(exchangeName)")
         }
     }
 
     /// Publish a message to the broker on a given exchange.
-    /// 
+    ///
     /// This method will block until it is able to publish or is cancelled.
-    /// 
+    ///
     /// - Parameters:
     ///   - value: The `MassTransitMessage`-conforming message to send.
     ///   - exchangeName: The name of the exchange to publish to. Defaults to the name of the message.
@@ -108,7 +108,7 @@ public struct MassTransit: Sendable {
         logger.debug("Publishing message of type \(messageType) on exchange \(exchangeName)...")
         try await withPublishSpan(wrapper.messageId, messageType, .publish, exchangeName, routingKey) {
             try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
-            logger.debug("Published message \(value) to exchange \(exchangeName)")
+            logger.trace("Published message \(value) to exchange \(exchangeName)")
         }
     }
 
@@ -138,9 +138,9 @@ public struct MassTransit: Sendable {
     }
 
     /// Consume a stream of a message type from a given queue bound to an exchange.
-    /// 
+    ///
     /// This method will block until it is able to consume or is cancelled.
-    /// 
+    ///
     /// - Parameters:
     ///   - _: The `MassTransitMessage`-conforming message to consume.
     ///   - queueName: The name of the queue for this consumer. Defaults to the message type + "-Consumer".
@@ -173,7 +173,7 @@ public struct MassTransit: Sendable {
             consumeStream.compactMap { buffer in
                 let wrapper = try processConsumeBuffer(buffer, as: T.self, .consume, queueName, routingKey)
                 if let wrapper {
-                    logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+                    logger.trace("Consumed message \(wrapper.message) from queue \(queueName)")
                 }
                 return wrapper?.message
             }
@@ -181,10 +181,10 @@ public struct MassTransit: Sendable {
     }
 
     /// Consume a stream of `RequestContext` for a specific message type.
-    /// 
+    ///
     /// This is the same as the regular `consume()` method, but adds a `RequestContext` wrapper that
     /// allows the application to `.respond()` to the requests that may come in.
-    /// 
+    ///
     /// - Parameters:
     ///   - _: The `MassTransitMessage`-conforming message to consume.
     ///   - queueName: The name of the queue for this consumer. Defaults to the message type + "-Consumer".
@@ -217,7 +217,7 @@ public struct MassTransit: Sendable {
             consumeStream.compactMap { buffer in
                 let wrapper = try processConsumeBuffer(buffer, as: T.self, .consume, queueName, routingKey)
                 if let wrapper {
-                    logger.debug("Consumed message \(wrapper.message) from queue \(queueName)")
+                    logger.trace("Consumed message \(wrapper.message) from queue \(queueName)")
 
                     // Create ConsumeContext from message
                     return RequestContext(
@@ -234,10 +234,10 @@ public struct MassTransit: Sendable {
     }
 
     /// Perform a request using a specific message type, expecting another message type as a response.
-    /// 
+    ///
     /// This method implements the most basic subset of the C# MassTransit library's Request/Response
     /// functionality by publishing a request, then awaiting a response on a specific exchange.
-    /// 
+    ///
     /// - Parameters:
     ///   - value: The `MassTransitMessage`-conforming request to publish.
     ///   - _: The type of the `MassTransitMessage`-conforming response we expect.
@@ -315,7 +315,7 @@ public struct MassTransit: Sendable {
         let requestJson = try request.jsonEncode()
         logger.trace("Request JSON: \(String(buffer: requestJson))")
 
-        logger.info("Sending request of type \(messageType) to exchange \(exchangeName)...")
+        logger.debug("Sending request of type \(messageType) to exchange \(exchangeName)...")
         try await withPublishSpan(request.messageId, messageType, .request, exchangeName, routingKey) {
             try await publisher.publish(requestJson, routingKey: routingKey)
         }
@@ -324,7 +324,7 @@ public struct MassTransit: Sendable {
         for await response in responseStream {
             let wrapper = try processConsumeBuffer(response, as: TResponse.self, .response, requestName, routingKey)
             if let wrapper {
-                logger.debug("Consumed response \(wrapper.message) from queue \(requestName)")
+                logger.trace("Consumed response \(wrapper.message) from queue \(requestName)")
                 return wrapper.message
             }
         }
