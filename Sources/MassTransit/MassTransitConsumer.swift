@@ -163,7 +163,7 @@ public actor MassTransitConsumer: Service {
 
         return .init(
             consumerStream.compactMap { wrapper in
-                self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
+                self.logger.trace("Consumed message \(wrapper.message) from queue \(self.queueName)")
                 return wrapper.message
             }
         )
@@ -203,7 +203,7 @@ public actor MassTransitConsumer: Service {
 
         return .init(
             consumerStream.compactMap { wrapper in
-                self.logger.debug("Consumed message \(wrapper.message) from queue \(self.queueName)")
+                self.logger.trace("Consumed message \(wrapper.message) from queue \(self.queueName)")
 
                 // Create RequestContext from message
                 return RequestContext(
