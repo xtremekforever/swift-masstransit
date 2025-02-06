@@ -230,7 +230,7 @@ public actor MassTransitConsumer: Service {
         isConsumerReady = true
 
         // Consume messages from the consumer
-        for await buffer in consumeStream {
+        for await buffer in consumeStream.cancelOnGracefulShutdown() {
             process(buffer)
         }
     }
