@@ -91,6 +91,7 @@ public actor MassTransitConsumer: Service {
         _ bindingOptions: BindingOptions
     ) async throws {
         var firstAttempt = true
+        let firstAttemptStart = ContinuousClock().now
 
         while !Task.isCancelledOrShuttingDown {
             do {
@@ -119,11 +120,18 @@ public actor MassTransitConsumer: Service {
 
                 firstAttempt = false
             } catch {
+                // If this is our first attempt to connect, keep trying until we reach the timeout
+                if !firstAttempt && ContinuousClock().now - firstAttemptStart < retryInterval {
+                    await gracefulCancellableDelay(connection.connectionPollingInterval)
+                    continue
+                }
+
                 logger.error("Error setting up message binding \(messageExchange): \(error)")
 
                 // Consume retry
                 logger.debug("Will retry setting up \(messageExchange) in \(retryInterval)")
                 try await Task.sleep(for: retryInterval)
+                firstAttempt = false
             }
         }
     }
