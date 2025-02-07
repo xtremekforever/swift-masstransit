@@ -84,6 +84,21 @@ public actor MassTransitConsumer: Service {
         consumers.removeValue(forKey: urn(from: messageType))
     }
 
+    private func waitForConnectionAndConsumer(timeout: Duration) async {
+        let start = ContinuousClock().now
+        while !Task.isCancelledOrShuttingDown {
+            if await connection.isConnected && isConsumerReady {
+                break
+            }
+
+            if ContinuousClock().now - start >= timeout {
+                break
+            }
+
+            await gracefulCancellableDelay(connection.connectionPollingInterval)
+        }
+    }
+
     private func bindMessageExchange(
         _ messageExchange: String,
         _ exchangeOptions: ExchangeOptions,
@@ -92,6 +107,9 @@ public actor MassTransitConsumer: Service {
     ) async throws {
         var firstAttempt = true
         let firstAttemptStart = ContinuousClock().now
+
+        // Wait for connection and consumer before attempting to bind
+        await waitForConnectionAndConsumer(timeout: retryInterval)
 
         while !Task.isCancelledOrShuttingDown {
             do {
@@ -116,7 +134,7 @@ public actor MassTransitConsumer: Service {
                 }
 
                 // Wait for connection, timeout after retryInterval
-                await connection.waitForConnection(timeout: retryInterval)
+                await waitForConnectionAndConsumer(timeout: retryInterval)
 
                 firstAttempt = false
             } catch {
