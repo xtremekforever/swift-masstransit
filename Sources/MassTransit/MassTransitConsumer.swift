@@ -139,7 +139,7 @@ public actor MassTransitConsumer: Service {
                 firstAttempt = false
             } catch {
                 // If this is our first attempt to connect, keep trying until we reach the timeout
-                if !firstAttempt && ContinuousClock().now - firstAttemptStart < retryInterval {
+                if firstAttempt && ContinuousClock().now - firstAttemptStart < retryInterval {
                     await gracefulCancellableDelay(connection.connectionPollingInterval)
                     continue
                 }
