@@ -31,6 +31,12 @@ let package = Package(
                 .product(name: "TracingOpenTelemetrySemanticConventions", package: "swift-distributed-tracing-extras"),
             ]
         ),
+        .testTarget(
+            name: "Tests",
+            dependencies: [
+                "MassTransit"
+            ]
+        ),
         .executableTarget(
             name: "PublishConsume",
             dependencies: [
