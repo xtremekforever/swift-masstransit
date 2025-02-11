@@ -56,6 +56,8 @@ public actor MassTransitConsumer: Service {
     private func createMessageConsumer<T: MassTransitMessage>(
         _: T.Type, messageType: String
     ) -> AnyAsyncSequence<MassTransitWrapper<T>> {
+        assert(consumers[messageType] == nil, "Consumer for \(messageType) is already registered!")
+
         // Create a stream + continuation
         logger.info("Consuming messages of type \(messageType) on queue \(queueName)...")
         let (stream, continuation) = AsyncStream.makeStream(of: MassTransitWrapper<T>.self)
