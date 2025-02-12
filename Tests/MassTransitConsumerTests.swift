@@ -9,11 +9,12 @@ struct MassTransitConsumerTests {
     private let logger = createTestLogger()
 
     private func withConfiguredMassTransitConsumer(
+        connect: Bool = true,
         consumerName: String = #function,
         retryInterval: Duration = MassTransit.defaultRetryInterval,
         body: @escaping @Sendable (BasicConnection, MassTransit, MassTransitConsumer) async throws -> Void
     ) async throws {
-        try await withMassTransitConnection(logger: logger) { connection, massTransit in
+        try await withMassTransitConnection(connect: connect, logger: logger) { connection, massTransit in
             try await withRunningMassTransitConsumer(
                 using: connection, consumerName: consumerName,
                 configuration: .init(exchangeOptions: .init(type: .fanout, autoDelete: true)),
@@ -64,10 +65,38 @@ struct MassTransitConsumerTests {
     }
 
     @Test
-    func recoversAfterConnectionFailure() async throws {
+    func recoversAfterInitialConnectionFailure() async throws {
         // Arrange
         try await withConfiguredMassTransitConsumer(
-            consumerName: #function, retryInterval: .milliseconds(10)
+            connect: false, retryInterval: .milliseconds(250)
+        ) { connection, massTransit, consumer in
+            let message = TestMessage(value: "test publish after connection failure")
+            let messageExchange = "\(#function).\(TestMessage.self)"
+            let exchangeOptions = ExchangeOptions(type: .direct, durable: false, autoDelete: true)
+            let stream = try await consumer.consume(
+                TestMessage.self, messageExchange: messageExchange,
+                exchangeOptions: exchangeOptions
+            )
+
+            // Make sure the consumer is not ready
+            #expect(await !consumer.isConsumerReady)
+
+            // Connect to broker, wait for connection
+            try await connection.connect()
+            await consumer.waitForConsumerReadyState(ready: true, timeout: .seconds(10))
+
+            // Publish a test message, verify it arrives on consumer stream
+            try await consumer.publishAndVerify(
+                message, using: messageExchange, publishWith: massTransit, verifyOn: stream
+            )
+        }
+    }
+
+    @Test
+    func rebindsConsumersAfterConnectionFailure() async throws {
+        // Arrange
+        try await withConfiguredMassTransitConsumer(
+            consumerName: #function, retryInterval: .milliseconds(250)
         ) { connection, massTransit, consumer in
             let messageExchange = "\(#function)-\(TestMessage.self)"
             let exchangeOptions = ExchangeOptions(type: .direct, durable: false, autoDelete: true)
@@ -76,12 +105,10 @@ struct MassTransitConsumerTests {
             )
 
             // Ensure that consumer works first
-            let testMessage1 = TestMessage(value: "first message")
-            try await massTransit.publish(
-                testMessage1, exchangeName: messageExchange, configuration: .init(exchangeOptions: exchangeOptions)
+            try await consumer.publishAndVerify(
+                TestMessage(value: "first message"), using: messageExchange,
+                publishWith: massTransit, verifyOn: stream
             )
-            let consumedMessage1 = try #require(await stream.firstElement())
-            #expect(consumedMessage1 == testMessage1)
 
             // Disconnect from broker
             await connection.close()
@@ -92,17 +119,28 @@ struct MassTransitConsumerTests {
             await consumer.waitForConsumerReadyState(ready: true, timeout: .seconds(10))
 
             // Ensure that consumer on the original stream is working again
-            let testMessage2 = TestMessage(value: "second message")
-            try await massTransit.publish(
-                testMessage2, exchangeName: messageExchange, configuration: .init(exchangeOptions: exchangeOptions)
+            try await consumer.publishAndVerify(
+                TestMessage(value: "second message"), using: messageExchange,
+                publishWith: massTransit, verifyOn: stream
             )
-            let consumedMessage2 = try #require(await stream.firstElement())
-            #expect(consumedMessage2 == testMessage2)
         }
     }
 }
 
 extension MassTransitConsumer {
+    func publishAndVerify<T: MassTransitMessage & Equatable>(
+        _ message: T, using messageExchange: String,
+        exchangeOptions: ExchangeOptions = .init(type: .direct, durable: false, autoDelete: true),
+        publishWith massTransit: MassTransit,
+        verifyOn stream: AnyAsyncSequence<T>
+    ) async throws {
+        try await massTransit.publish(
+            message, exchangeName: messageExchange, configuration: .init(exchangeOptions: exchangeOptions)
+        )
+        let consumedMessage = try #require(await stream.firstElement())
+        #expect(consumedMessage == message)
+    }
+
     func handleTestConsumeWithPublish<T: MassTransitMessage & Equatable>(
         _ message: T, exchangeName: String = #function,
         exchangeOptions: ExchangeOptions = .init(type: .direct, durable: false, autoDelete: true),
@@ -113,28 +151,7 @@ extension MassTransitConsumer {
             T.self, messageExchange: messageExchange, exchangeOptions: exchangeOptions
         )
 
-        // Act
-        try await massTransit.publish(
-            message, exchangeName: messageExchange, configuration: .init(exchangeOptions: exchangeOptions)
-        )
-
-        // Assert
-        let consumedMessage = try #require(await stream.firstElement())
-        #expect(consumedMessage == message)
-    }
-
-    func waitForConsumerReadyState(ready: Bool, timeout: Duration) async {
-        let start = ContinuousClock().now
-        while !Task.isCancelledOrShuttingDown {
-            if isConsumerReady == ready {
-                break
-            }
-
-            if ContinuousClock().now - start >= timeout {
-                break
-            }
-
-            await gracefulCancellableDelay(connection.connectionPollingInterval)
-        }
+        // Act + Assert
+        try await publishAndVerify(message, using: messageExchange, publishWith: massTransit, verifyOn: stream)
     }
 }

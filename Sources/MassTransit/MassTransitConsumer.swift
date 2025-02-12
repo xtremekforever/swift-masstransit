@@ -119,8 +119,12 @@ public actor MassTransitConsumer: Service {
             connection, operationName: "setting up message binding \(messageExchange)",
             retryInterval: retryInterval
         ) {
-            guard let channel = try await self.connection.getChannel() else {
-                throw AMQPConnectionError.connectionClosed(replyCode: nil, replyText: nil)
+            // Wait for consumer ready before continuing
+            await self.waitForConsumerReadyState(ready: true, timeout: self.retryInterval)
+
+            // Return immediately if we don't have a channel or the consumer is not ready
+            guard let channel = try await self.connection.getChannel(), await self.isConsumerReady else {
+                return false
             }
 
             // Declare messageExchange using options
@@ -220,6 +224,21 @@ public actor MassTransitConsumer: Service {
                 )
             }
         )
+    }
+
+    func waitForConsumerReadyState(ready: Bool, timeout: Duration) async {
+        let start = ContinuousClock().now
+        while !Task.isCancelledOrShuttingDown {
+            if isConsumerReady == ready {
+                break
+            }
+
+            if ContinuousClock().now - start >= timeout {
+                break
+            }
+
+            await gracefulCancellableDelay(connection.connectionPollingInterval)
+        }
     }
 
     private func handleConsumerSuccess() async throws {
