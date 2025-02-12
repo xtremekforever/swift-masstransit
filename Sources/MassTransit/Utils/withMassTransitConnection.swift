@@ -6,7 +6,7 @@ public func withMassTransitConnection(
     connectionConfiguration: ConnectionConfiguration = .init(),
     connect: Bool = true,
     logger: Logger,
-    body: @escaping @Sendable (Connection, MassTransit) async throws -> Void
+    body: @escaping @Sendable (BasicConnection, MassTransit) async throws -> Void
 ) async throws {
     let rabbitMq = BasicConnection(
         connectionString, configuration: connectionConfiguration, logger: logger

@@ -113,6 +113,8 @@ public actor MassTransitConsumer: Service {
         _ routingKey: String,
         _ bindingOptions: BindingOptions
     ) async throws {
+        logger.debug("Setting up message binding for exchange \(messageExchange) for consumer \(queueName)...")
+
         try await withRetryingConnectionBody(
             connection, operationName: "setting up message binding \(messageExchange)",
             retryInterval: retryInterval
@@ -220,13 +222,11 @@ public actor MassTransitConsumer: Service {
         )
     }
 
-    private func handleConsumerStarting() {
-        isConsumerReady = false
-    }
-
     private func handleConsumerSuccess() async throws {
         try await self.onConsumerReady?()
         self.isConsumerReady = true
+
+        logger.debug("Consumer is ready on queue \(queueName)")
 
         // Re-bind consumer exchanges
         for messageTypeConsumer in consumers.values {
@@ -239,21 +239,23 @@ public actor MassTransitConsumer: Service {
         }
     }
 
+    private func handleConsumerCompleted() {
+        logger.debug("Consumer on queue \(self.queueName) completed...")
+        isConsumerReady = false
+    }
+
     /// Run the consumer.
     ///
     /// This is *REQUIRED* to run the RabbitMq consumer and process messages from the resulting
     /// stream. The message type in each message is checked and attempted to be routed to a different
     /// MassTransit consumer, otherwise an error is printed that an unknown message type was received.
     public func run() async throws {
-        logger.info("Starting consumer on queue \(queueName)...")
+        logger.debug("Starting consumer on queue \(queueName)...")
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
         try await withRetryingConnectionBody(
             connection, operationName: "consuming from queue \(queueName)", retryInterval: retryInterval
         ) {
-            // When we are starting the consumer, it is not ready
-            await self.handleConsumerStarting()
-
             // Try to consume
             let consumeStream = try await consumer.consumeBuffer()
 
@@ -264,6 +266,8 @@ public actor MassTransitConsumer: Service {
             for await buffer in consumeStream.cancelOnGracefulShutdown() {
                 await self.process(buffer)
             }
+
+            await self.handleConsumerCompleted()
         }
     }
 
