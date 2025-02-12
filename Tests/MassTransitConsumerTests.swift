@@ -64,6 +64,31 @@ struct MassTransitConsumerTests {
         }
     }
 
+    @Test(arguments: [(TestMessage(value: "A request message"), MessageType2())])
+    func consumesRequestAndResponds(request: TestMessage, response: MessageType2) async throws {
+        // Arrange
+        try await withConfiguredMassTransitConsumer(consumerName: #function) { _, massTransit, consumer in
+            let requestStream = try await consumer.consumeWithContext(
+                TestMessage.self, exchangeOptions: .responseDefaults
+            )
+
+            // Act + Assert
+            try await withThrowingDiscardingTaskGroup { group in
+                group.addTask {
+                    let requestContext = try #require(await requestStream.firstElement())
+                    try await requestContext.respond(response)
+                }
+
+                // Send a request, assert the response
+                let requestResponse = try await massTransit.request(
+                    request, MessageType2.self,
+                    configuration: .init(exchangeOptions: .responseDefaults)
+                )
+                #expect(requestResponse == response)
+            }
+        }
+    }
+
     @Test
     func recoversAfterInitialConnectionFailure() async throws {
         // Arrange
