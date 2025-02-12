@@ -15,7 +15,7 @@ let package = Package(
             targets: ["MassTransit"])
     ],
     dependencies: [
-        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", from: "0.2.1"),
+        .package(url: "https://github.com/xtremekforever/swift-rabbitmq", branch: "#18-unit-testing-and-ci"),
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.48.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing-extras.git", from: "1.0.0-beta.1"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.0"),

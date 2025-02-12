@@ -28,7 +28,7 @@ public actor MassTransitConsumer: Service {
     }
 
     private(set) public var isConsumerReady = false
-    private var consumers: [String: MessageTypeConsumer] = [:]
+    private(set) var consumers: [String: MessageTypeConsumer] = [:]
 
     /// Create the MassTransit Consumer.
     ///
@@ -115,7 +115,7 @@ public actor MassTransitConsumer: Service {
     ) async throws {
         try await withRetryingConnectionBody(
             connection, operationName: "setting up message binding \(messageExchange)",
-            retryInterval: retryInterval, exitOnSuccess: true
+            retryInterval: retryInterval
         ) {
             guard let channel = try await self.connection.getChannel() else {
                 throw AMQPConnectionError.connectionClosed(replyCode: nil, replyText: nil)
@@ -129,7 +129,7 @@ public actor MassTransitConsumer: Service {
                 self.exchangeName, messageExchange, routingKey, bindingOptions, self.logger
             )
 
-            return
+            return true
         }
     }
 
