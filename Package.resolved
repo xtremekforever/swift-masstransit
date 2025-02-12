@@ -1,5 +1,5 @@
 {
-  "originHash" : "f2a5385ef0443c969663220d80323bac4bdd76ff55953fd9fa9adc6c293d65c5",
+  "originHash" : "14ec3d28c709787c3f9cd60d6785cb500ab949685e28b8a624613acdf03ec57f",
   "pins" : [
     {
       "identity" : "rabbitmq-nio",
@@ -105,8 +105,8 @@
       "kind" : "remoteSourceControl",
       "location" : "https://github.com/xtremekforever/swift-rabbitmq",
       "state" : {
-        "branch" : "#18-unit-testing-and-ci",
-        "revision" : "fae04aa06058f4ccf7a626842b7e0604fc1620b3"
+        "revision" : "5ca75b831053d2d560ada95736e906ba86b78ccd",
+        "version" : "0.3.1"
       }
     },
     {
