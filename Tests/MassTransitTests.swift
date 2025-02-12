@@ -8,10 +8,6 @@ import Testing
 struct MassTransitTests {
     private let logger = createTestLogger()
 
-    struct TestMessage: MassTransitMessage {
-        var value: String
-    }
-
     @Test
     func sendMessageSucceeds() async throws {
         try await withMassTransitConnection(logger: logger) { _, massTransit in
