@@ -11,14 +11,14 @@ struct MassTransitConsumerTests {
     private func withConfiguredMassTransitConsumer(
         connect: Bool = true,
         consumerName: String = #function,
+        configuration: MassTransitConsumerConfiguration = testConsumerConfiguration,
         retryInterval: Duration = MassTransit.defaultRetryInterval,
         body: @escaping @Sendable (BasicConnection, MassTransit, MassTransitConsumer) async throws -> Void
     ) async throws {
         try await withMassTransitConnection(connect: connect, logger: logger) { connection, massTransit in
             try await withRunningMassTransitConsumer(
                 using: connection, consumerName: consumerName,
-                configuration: .init(exchangeOptions: .init(type: .fanout, autoDelete: true)),
-                retryInterval: retryInterval
+                configuration: configuration, retryInterval: retryInterval
             ) { consumer in
                 try await body(connection, massTransit, consumer)
             }
@@ -97,7 +97,7 @@ struct MassTransitConsumerTests {
         ) { connection, massTransit, consumer in
             let message = TestMessage(value: "test publish after connection failure")
             let messageExchange = "\(#function).\(TestMessage.self)"
-            let exchangeOptions = ExchangeOptions(type: .direct, durable: false, autoDelete: true)
+            let exchangeOptions = testMessageTypeExchangeOptions
             let stream = try await consumer.consume(
                 TestMessage.self, messageExchange: messageExchange,
                 exchangeOptions: exchangeOptions
@@ -124,7 +124,7 @@ struct MassTransitConsumerTests {
             consumerName: #function, retryInterval: .milliseconds(250)
         ) { connection, massTransit, consumer in
             let messageExchange = "\(#function)-\(TestMessage.self)"
-            let exchangeOptions = ExchangeOptions(type: .direct, durable: false, autoDelete: true)
+            let exchangeOptions = testMessageTypeExchangeOptions
             let stream = try await consumer.consume(
                 TestMessage.self, messageExchange: messageExchange, exchangeOptions: exchangeOptions
             )
@@ -155,7 +155,7 @@ struct MassTransitConsumerTests {
 extension MassTransitConsumer {
     func publishAndVerify<T: MassTransitMessage & Equatable>(
         _ message: T, using messageExchange: String,
-        exchangeOptions: ExchangeOptions = .init(type: .direct, durable: false, autoDelete: true),
+        exchangeOptions: ExchangeOptions = testMessageTypeExchangeOptions,
         publishWith massTransit: MassTransit,
         verifyOn stream: AnyAsyncSequence<T>
     ) async throws {
@@ -168,7 +168,7 @@ extension MassTransitConsumer {
 
     func handleTestConsumeWithPublish<T: MassTransitMessage & Equatable>(
         _ message: T, exchangeName: String = #function,
-        exchangeOptions: ExchangeOptions = .init(type: .direct, durable: false, autoDelete: true),
+        exchangeOptions: ExchangeOptions = testMessageTypeExchangeOptions,
         publishWith massTransit: MassTransit
     ) async throws {
         let messageExchange = "\(exchangeName).\(T.self)"
