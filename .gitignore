@@ -1,5 +1,6 @@
 # Swift
 .build*
+default.profraw
 
 # VSCode
 launch.json

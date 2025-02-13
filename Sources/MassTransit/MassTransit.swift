@@ -296,7 +296,7 @@ public struct MassTransit: Sendable {
             connection, requestName, requestName, routingKey,
             exchangeOptions: ExchangeOptions(type: .fanout, durable: false, autoDelete: true),
             queueOptions: QueueOptions(autoDelete: true, durable: false, args: ["x-expires": .int32(60000)]),
-            consumerOptions: ConsumerOptions(noAck: true)
+            consumerOptions: ConsumerOptions(autoAck: true)
         )
 
         let messageType = customMessageType ?? exchangeName

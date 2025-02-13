@@ -8,14 +8,13 @@ import Testing
 struct MassTransitTests {
     private let logger = createTestLogger()
 
-    struct TestMessage: MassTransitMessage {
-        var value: String
-    }
-
     @Test
     func sendMessageSucceeds() async throws {
         try await withMassTransitConnection(logger: logger) { _, massTransit in
-            try await massTransit.send(TestMessage(value: "A test message"))
+            try await massTransit.send(
+                TestMessage(value: "A test message"), exchangeName: #function,
+                configuration: testPublisherConfiguration
+            )
         }
     }
 
@@ -23,7 +22,10 @@ struct MassTransitTests {
     func sendMessageFails() async throws {
         try await withMassTransitConnection(connect: false, logger: logger) { _, massTransit in
             await #expect(throws: AMQPConnectionError.self) {
-                try await massTransit.send(TestMessage(value: "A test message"))
+                try await massTransit.send(
+                    TestMessage(value: "A test message"), exchangeName: #function,
+                    configuration: testPublisherConfiguration
+                )
             }
         }
     }
