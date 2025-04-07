@@ -1,6 +1,15 @@
 {
-  "originHash" : "14ec3d28c709787c3f9cd60d6785cb500ab949685e28b8a624613acdf03ec57f",
+  "originHash" : "6f072a90a0fb5ea2de5a4ad0a1ed1dd6f29de8fbf649cbbefd4067d1261ef715",
   "pins" : [
+    {
+      "identity" : "ikigajson",
+      "kind" : "remoteSourceControl",
+      "location" : "https://github.com/orlandos-nl/IkigaJSON.git",
+      "state" : {
+        "revision" : "4e50e50e0722955550e8b337198bfa176905bcdc",
+        "version" : "2.2.4"
+      }
+    },
     {
       "identity" : "rabbitmq-nio",
       "kind" : "remoteSourceControl",

@@ -1,6 +1,6 @@
-import Foundation
+import FoundationEssentials
+import IkigaJSON
 import NIOCore
-import NIOFoundationCompat
 
 public typealias MassTransitMessage = Codable & Sendable
 
@@ -21,8 +21,8 @@ func urn(from messageType: String) -> String {
 extension MassTransitWrapper {
     init(_: T.Type, from buffer: ByteBuffer) throws {
         // Decode from JSON
-        let decoder = JSONDecoder()
-        decoder.dateDecodingStrategy = .iso8601
+        var decoder = IkigaJSONDecoder()
+        decoder.settings.dateDecodingStrategy = .iso8601
         guard let wrapper = try? decoder.decode(Self.self, from: buffer)
         else {
             throw MassTransitError.decodingError(data: String(buffer: buffer), type: T.self)
@@ -32,15 +32,15 @@ extension MassTransitWrapper {
 
     func jsonEncode() throws -> ByteBuffer {
         // Encode to JSON
-        let encoder = JSONEncoder()
-        encoder.dateEncodingStrategy = .iso8601
-        encoder.outputFormatting = [.prettyPrinted, .withoutEscapingSlashes, .sortedKeys]
-        guard let json = try? encoder.encodeAsByteBuffer(self, allocator: .init())
-        else {
+        var encoder = IkigaJSONEncoder()
+        encoder.settings.dateEncodingStrategy = .iso8601
+        do {
+            var json = ByteBuffer()
+            try encoder.encodeAndWrite(self, into: &json)
+            return json
+        } catch {
             throw MassTransitError.encodingError(message: message)
         }
-
-        return json
     }
 
     static func create<TMessage: MassTransitMessage>(
