@@ -40,14 +40,16 @@ let package = Package(
         .executableTarget(
             name: "PublishConsume",
             dependencies: [
-                "MassTransit"
+                "MassTransit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "Sources/Examples/PublishConsume"
         ),
         .executableTarget(
             name: "RequestResponse",
             dependencies: [
-                "MassTransit"
+                "MassTransit",
+                .product(name: "ArgumentParser", package: "swift-argument-parser"),
             ],
             path: "Sources/Examples/RequestResponse"
         ),
