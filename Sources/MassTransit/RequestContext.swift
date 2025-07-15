@@ -48,15 +48,25 @@ extension RequestContext {
         var response = MassTransitWrapper<T>.create(using: value, messageType: messageType)
         response.requestId = requestId
         response.destinationAddress = responseAddress
-        logger.trace("Wrapper for response to \(responseExchange): \(response)")
+        logger.trace(
+            "Wrapper for response",
+            metadata: ["response": .string("\(response)"), "responseExchange": .string(responseExchange)]
+        )
 
         // Encode to JSON
         let messageJson = try response.jsonEncode()
-        logger.trace("Message JSON to respond: \(String(buffer: messageJson))")
+        logger.trace("Message JSON to respond", metadata: ["messageJson": .string(String(buffer: messageJson))])
 
         // Publisher is used to send the response
         let publisher = configuration.createPublisher(using: connection, responseExchange)
-        logger.debug("Publishing response of type \(messageType) on exchange \(responseExchange)...")
+        logger.debug(
+            "Publishing response message...",
+            metadata: [
+                "messageType": .string(messageType),
+                "responseExchange": .string(responseExchange),
+                "routingKey": .string(routingKey),
+            ]
+        )
         try await withPublishSpan(response.messageId, messageType, .respond, responseExchange, routingKey) {
             try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
         }
