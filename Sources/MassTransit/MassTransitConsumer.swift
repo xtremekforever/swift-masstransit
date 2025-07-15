@@ -58,7 +58,11 @@ public actor MassTransitConsumer: Service {
         self.configuration = configuration
         self.retryInterval = retryInterval
         self.onConsumerReady = onConsumerReady
-        self.logger = logger
+        self.logger = logger.withMetadata([
+            "queueName": .string(queueName),
+            "exchangeName": .string(exchangeName),
+            "routingKey": .string(routingKey),
+        ])
     }
 
     private func createMessageConsumer<T: MassTransitMessage>(
@@ -71,11 +75,13 @@ public actor MassTransitConsumer: Service {
     ) async throws -> AnyAsyncSequence<MassTransitWrapper<T>> {
         assert(consumers[messageType] == nil, "Consumer for \(messageType) is already registered!")
 
+        let logger = logger.withMetadata(["messageType": .string(messageType)])
+
         // We need to declare & bind an exchange for this message
         try await bindMessageExchange(messageExchange, exchangeOptions, routingKey, bindingOptions)
 
         // Create a stream + continuation
-        logger.info("Consuming messages of type \(messageType) on queue \(queueName)...")
+        logger.debug("Adding message type-specific consumer...")
         let (stream, continuation) = AsyncStream.makeStream(of: MassTransitWrapper<T>.self)
 
         // Create a message handler
@@ -96,14 +102,14 @@ public actor MassTransitConsumer: Service {
 
         return .init(
             stream.compactMap { wrapper in
-                self.logger.trace("Decoded buffer from \(self.queueName) to wrapper: \(wrapper)")
+                wrapper.logAsTrace(using: logger)
                 return wrapper
             }
         )
     }
 
     private func removeConsumer(messageType: String) {
-        logger.debug("Removing consumer \(messageType) for \(queueName)...")
+        logger.debug("Removing message type-specific consumer...", metadata: ["messageType": .string(messageType)])
         consumers.removeValue(forKey: urn(from: messageType))
     }
 
@@ -113,7 +119,10 @@ public actor MassTransitConsumer: Service {
         _ routingKey: String,
         _ bindingOptions: BindingOptions
     ) async throws {
-        logger.debug("Setting up message binding for exchange \(messageExchange) for consumer \(queueName)...")
+        logger.debug(
+            "Setting up message binding for exchange...",
+            metadata: ["messageExchange": .string(messageExchange)]
+        )
 
         try await withRetryingConnectionBody(
             connection, operationName: "setting up message binding \(messageExchange)",
@@ -165,6 +174,7 @@ public actor MassTransitConsumer: Service {
     ) async throws -> AnyAsyncSequence<T> {
         // Determine message type
         let messageType = customMessageType ?? messageExchange
+        let logger = logger.withMetadata(["messageType": .string(messageType)])
 
         // Create a stream and message handler
         let consumerStream = try await createMessageConsumer(
@@ -173,7 +183,7 @@ public actor MassTransitConsumer: Service {
 
         return .init(
             consumerStream.compactMap { wrapper in
-                self.logger.trace("Consumed message \(wrapper.message) from queue \(self.queueName)")
+                wrapper.logAsTrace(using: logger)
                 return wrapper.message
             }
         )
@@ -204,6 +214,7 @@ public actor MassTransitConsumer: Service {
     ) async throws -> AnyAsyncSequence<RequestContext<T>> {
         // Determine message type
         let messageType = customMessageType ?? messageExchange
+        let logger = logger.withMetadata(["messageType": .string(messageType)])
 
         // Create a stream and message handler
         let consumerStream = try await createMessageConsumer(
@@ -212,7 +223,7 @@ public actor MassTransitConsumer: Service {
 
         return .init(
             consumerStream.compactMap { wrapper in
-                self.logger.trace("Consumed message \(wrapper.message) from queue \(self.queueName)")
+                wrapper.logAsTrace(using: logger)
 
                 // Create RequestContext from message
                 return RequestContext(
@@ -245,7 +256,7 @@ public actor MassTransitConsumer: Service {
         try await self.onConsumerReady?()
         self.isConsumerReady = true
 
-        logger.debug("Consumer is ready on queue \(queueName)")
+        logger.debug("Consumer for queue is ready")
 
         // Re-bind consumer exchanges
         for messageTypeConsumer in consumers.values {
@@ -259,7 +270,7 @@ public actor MassTransitConsumer: Service {
     }
 
     private func handleConsumerCompleted() {
-        logger.debug("Consumer on queue \(self.queueName) completed...")
+        logger.debug("Consumer for queue completed")
         isConsumerReady = false
     }
 
@@ -269,7 +280,7 @@ public actor MassTransitConsumer: Service {
     /// stream. The message type in each message is checked and attempted to be routed to a different
     /// MassTransit consumer, otherwise an error is printed that an unknown message type was received.
     public func run() async throws {
-        logger.debug("Starting consumer on queue \(queueName)...")
+        logger.debug("Starting consuming of messages from queue...")
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
         try await withRetryingConnectionBody(
@@ -292,7 +303,7 @@ public actor MassTransitConsumer: Service {
 
     private func process(_ buffer: ByteBuffer) {
         withConsumeSpan(self.queueName, .consume, self.routingKey) { span in
-            logger.trace("Consumed buffer from \(queueName): \(String(buffer: buffer))")
+            buffer.logJsonAsTrace(using: logger)
             var handled = false
 
             do {
@@ -306,21 +317,24 @@ public actor MassTransitConsumer: Service {
                     }
 
                     // If there is a matching type, try to process it
-                    logger.trace("Message type associated for queue \(queueName): \(messageType)")
+                    logger.trace(
+                        "Message type associated for queue, will try to decode it",
+                        metadata: ["messageType": .string(messageType)]
+                    )
                     try messageTypeConsumer.handler(buffer)
                     handled = true
                 }
 
                 // If the message is not handled, print an error
                 if !handled {
-                    logger.error(
-                        "Message of type(s) \(wrapper.messageType) from queue \(queueName) is missing a consumer!"
+                    logger.error("No matching type-specific consumer for message types, unable to process",
+                        metadata: ["messageTypes": .array(wrapper.messageType.map { .string($0) })]
                     )
 
                     // TODO: This message should then be routed to a different error or unhandled queue
                 }
             } catch {
-                logger.error("Error in message consumed from \(queueName): \(error)")
+                logger.error("Error in message consumed from queue", metadata: ["error": .string("\(error)")])
 
                 // TODO: We should route this to an error queue
             }
