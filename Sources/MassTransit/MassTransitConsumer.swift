@@ -81,7 +81,7 @@ public actor MassTransitConsumer: Service {
         try await bindMessageExchange(messageExchange, exchangeOptions, routingKey, bindingOptions)
 
         // Create a stream + continuation
-        logger.debug("Adding message type-specific consumer...")
+        logger.debug("Adding message bound consumer...")
         let (stream, continuation) = AsyncStream.makeStream(of: MassTransitWrapper<T>.self)
 
         // Create a message handler
@@ -109,7 +109,7 @@ public actor MassTransitConsumer: Service {
     }
 
     private func removeConsumer(messageType: String) {
-        logger.debug("Removing message type-specific consumer...", metadata: ["messageType": .string(messageType)])
+        logger.debug("Removing message bound consumer...", metadata: ["messageType": .string(messageType)])
         consumers.removeValue(forKey: urn(from: messageType))
     }
 
@@ -121,7 +121,10 @@ public actor MassTransitConsumer: Service {
     ) async throws {
         logger.debug(
             "Setting up message binding for exchange...",
-            metadata: ["messageExchange": .string(messageExchange)]
+            metadata: [
+                "messageExchange": .string(messageExchange),
+                "routingKey": .string(routingKey),
+            ]
         )
 
         try await withRetryingConnectionBody(
@@ -317,8 +320,8 @@ public actor MassTransitConsumer: Service {
                     }
 
                     // If there is a matching type, try to process it
-                    logger.trace(
-                        "Message type associated for queue, will try to decode it",
+                    logger.debug(
+                        "Consumed message from queue, handling...",
                         metadata: ["messageType": .string(messageType)]
                     )
                     try messageTypeConsumer.handler(buffer)
@@ -327,7 +330,8 @@ public actor MassTransitConsumer: Service {
 
                 // If the message is not handled, print an error
                 if !handled {
-                    logger.error("No matching type-specific consumer for message types, unable to process",
+                    logger.error(
+                        "No matching consumer for message bound type, unable to process",
                         metadata: ["messageTypes": .array(wrapper.messageType.map { .string($0) })]
                     )
 

@@ -180,6 +180,7 @@ public struct MassTransit: Sendable {
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
         // Determine message type
+        // TODO: Filter responses by messageType urn
         let messageType = customMessageType ?? exchangeName
         let logger = logger.withMetadata([
             "messageType": .string(messageType),
@@ -228,6 +229,7 @@ public struct MassTransit: Sendable {
         let consumer = configuration.createConsumer(using: connection, queueName, exchangeName, routingKey)
 
         // Determine message type
+        // TODO: Filter responses by messageType urn
         let messageType = customMessageType ?? exchangeName
         let logger = logger.withMetadata([
             "messageType": .string(messageType),
