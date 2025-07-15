@@ -58,6 +58,7 @@ public struct MassTransit: Sendable {
         let logger = self.logger.withMetadata([
             "exchangeName": .string(exchangeName),
             "routingKey": .string(routingKey),
+            "messageType": .string(messageType),
         ])
 
         // Create MassTransitWrapper to send the message
@@ -69,10 +70,10 @@ public struct MassTransit: Sendable {
         messageJson.logJsonAsTrace(using: logger)
 
         // Publish message with span processor
-        logger.debug("Sending message to exchange...", metadata: ["messageType": .string(messageType)])
+        logger.debug("Sending message to exchange...")
         try await withPublishSpan(wrapper.messageId, messageType, .send, exchangeName, routingKey) {
             try await publisher.publish(messageJson, routingKey: routingKey)
-            logger.trace("Successfully sent message to exchange", metadata: ["message": .string("\(value)")])
+            logger.trace("Successfully sent message to exchange")
         }
     }
 
@@ -102,6 +103,7 @@ public struct MassTransit: Sendable {
         let logger = self.logger.withMetadata([
             "exchangeName": .string(exchangeName),
             "routingKey": .string(routingKey),
+            "messageType": .string(messageType),
         ])
 
         // Create MassTransitWrapper to send the message
@@ -113,10 +115,10 @@ public struct MassTransit: Sendable {
         messageJson.logJsonAsTrace(using: logger)
 
         // Publish message with span processor
-        logger.debug("Publishing message to exchange...", metadata: ["messageType": .string(messageType)])
+        logger.debug("Publishing message to exchange...")
         try await withPublishSpan(wrapper.messageId, messageType, .publish, exchangeName, routingKey) {
             try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
-            logger.trace("Successfully published message to exchange", metadata: ["message": .string("\(value)")])
+            logger.trace("Successfully published message to exchange")
         }
     }
 
@@ -192,10 +194,8 @@ public struct MassTransit: Sendable {
 
         return .init(
             consumeStream.compactMap { buffer in
+                logger.debug("Consumed message from queue")
                 let wrapper = try processConsumeBuffer(buffer, as: T.self, .consume, queueName, routingKey)
-                if let wrapper {
-                    logger.trace("Consumed message from queue", metadata: ["message": .string("\(wrapper.message)")])
-                }
                 return wrapper?.message
             }
         )
@@ -242,10 +242,9 @@ public struct MassTransit: Sendable {
 
         return .init(
             consumeStream.compactMap { buffer in
+                logger.debug("Consumed message from queue")
                 let wrapper = try processConsumeBuffer(buffer, as: T.self, .consume, queueName, routingKey)
                 if let wrapper {
-                    logger.trace("Consumed message from queue", metadata: ["message": .string("\(wrapper.message)")])
-
                     // Create ConsumeContext from message
                     return RequestContext(
                         connection: connection,
