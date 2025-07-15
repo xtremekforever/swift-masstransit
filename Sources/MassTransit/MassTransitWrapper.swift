@@ -1,4 +1,5 @@
 import Foundation
+import Logging
 import NIOCore
 import NIOFoundationCompat
 
@@ -58,3 +59,13 @@ extension MassTransitWrapper {
 
 /// Useful for parsing just the MassTransitWrapper while ignoring message content.
 struct Wrapper: MassTransitMessage {}
+
+extension MassTransitWrapper {
+    func logAsTrace(using logger: Logger) {
+        if logger.logLevel > .trace {
+            return
+        }
+
+        logger.trace("MassTransit wrapper contents", metadata: ["wrapper": .string("\(self)")])
+    }
+}

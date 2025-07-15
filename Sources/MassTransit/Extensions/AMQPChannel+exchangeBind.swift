@@ -10,7 +10,15 @@ extension AMQPChannel {
         _ bindingOptions: BindingOptions,
         _ logger: Logger
     ) async throws {
-        logger.trace("Binding exchange \(source) to \(destination) with options: \(bindingOptions)")
+        logger.trace(
+            "Binding exchange...",
+            metadata: [
+                "destination": .string(destination),
+                "source": .string(source),
+                "routingKey": .string(routingKey),
+                "bindingOptions": .string("\(bindingOptions)"),
+            ]
+        )
         try await exchangeBind(
             destination: destination,
             source: source,

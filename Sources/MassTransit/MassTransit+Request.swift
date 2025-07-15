@@ -70,53 +70,38 @@ extension MassTransit {
         )
 
         let messageType = customMessageType ?? exchangeName
+        let logger = logger.withMetadata([
+            "requestType": .string(messageType),
+            "requestExchange": .string(exchangeName),
+            "routingKey": .string(routingKey),
+            "responseQueue": .string(requestName),
+            "responseType": .string("\(TResponse.self)"),
+        ])
 
         // Create MassTransitWrapper to send the request
         var request = MassTransitWrapper<T>.create(using: value, messageType: messageType)
         request.requestId = UUID().uuidString
         request.sourceAddress = address
         request.responseAddress = address
-        logger.trace(
-            "Wrapper for request",
-            metadata: ["request": .string("\(request)"), "responseExchange": .string(exchangeName)]
-        )
+        request.logAsTrace(using: logger)
 
         // Start consuming before publishing request so we can get the response
         let responseStream = try await consumer.consumeBuffer()
 
         // Send the request with a regular publish
         let requestJson = try request.jsonEncode()
-        logger.trace("Request JSON", metadata: ["requestJson": .string(String(buffer: requestJson))])
+        requestJson.logJsonAsTrace(using: logger)
 
-        logger.debug(
-            "Sending request message...",
-            metadata: [
-                "messageType": .string(messageType),
-                "exchangeName": .string(exchangeName),
-                "routingKey": .string(routingKey),
-            ]
-        )
+        logger.debug("Sending request message...")
         try await withPublishSpan(request.messageId, messageType, .request, exchangeName, routingKey) {
             try await publisher.publish(requestJson, routingKey: routingKey)
         }
 
-        logger.debug(
-            "Waiting for response...",
-            metadata: [
-                "requestType": .string("\(TResponse.self)"),
-                "queue": .string(requestName),
-            ]
-        )
+        logger.debug("Waiting for response...")
         for await response in responseStream {
             let wrapper = try processConsumeBuffer(response, as: TResponse.self, .response, requestName, routingKey)
             if let wrapper {
-                logger.trace(
-                    "Consumed response from queue",
-                    metadata: [
-                        "response": .string("\(wrapper.message)"),
-                        "queue": .string(requestName),
-                    ]
-                )
+                logger.debug("Received response, transaction completed")
                 return wrapper.message
             }
         }

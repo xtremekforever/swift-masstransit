@@ -55,20 +55,24 @@ public struct MassTransit: Sendable {
     ) async throws {
         let publisher = configuration.createPublisher(using: connection, exchangeName)
         let messageType = customMessageType ?? exchangeName
+        let logger = self.logger.withMetadata([
+            "exchangeName": .string(exchangeName),
+            "routingKey": .string(routingKey),
+        ])
 
         // Create MassTransitWrapper to send the message
         let wrapper = MassTransitWrapper<T>.create(using: value, messageType: messageType)
-        logger.trace("Wrapper for send to \(exchangeName): \(wrapper)")
+        wrapper.logAsTrace(using: logger)
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
-        logger.trace("Message JSON to send: \(String(buffer: messageJson))")
+        messageJson.logJsonAsTrace(using: logger)
 
         // Publish message with span processor
-        logger.debug("Sending message of type \(messageType) on exchange \(exchangeName)...")
+        logger.debug("Sending message to exchange...", metadata: ["messageType": .string(messageType)])
         try await withPublishSpan(wrapper.messageId, messageType, .send, exchangeName, routingKey) {
             try await publisher.publish(messageJson, routingKey: routingKey)
-            logger.trace("Sent message \(value) to exchange \(exchangeName)")
+            logger.trace("Successfully sent message to exchange", metadata: ["message": .string("\(value)")])
         }
     }
 
@@ -95,20 +99,24 @@ public struct MassTransit: Sendable {
     ) async throws {
         let publisher = configuration.createPublisher(using: connection, exchangeName)
         let messageType = customMessageType ?? exchangeName
+        let logger = self.logger.withMetadata([
+            "exchangeName": .string(exchangeName),
+            "routingKey": .string(routingKey),
+        ])
 
         // Create MassTransitWrapper to send the message
         let wrapper = MassTransitWrapper<T>.create(using: value, messageType: messageType)
-        logger.trace("Wrapper for publish to \(exchangeName): \(wrapper)")
+        wrapper.logAsTrace(using: logger)
 
         // Encode to JSON
         let messageJson = try wrapper.jsonEncode()
-        logger.trace("Message JSON to publish: \(String(buffer: messageJson))")
+        messageJson.logJsonAsTrace(using: logger)
 
         // Publish message with span processor
-        logger.debug("Publishing message of type \(messageType) on exchange \(exchangeName)...")
+        logger.debug("Publishing message to exchange...", metadata: ["messageType": .string(messageType)])
         try await withPublishSpan(wrapper.messageId, messageType, .publish, exchangeName, routingKey) {
             try await publisher.retryingPublish(messageJson, routingKey: routingKey, retryInterval: retryInterval)
-            logger.trace("Published message \(value) to exchange \(exchangeName)")
+            logger.trace("Successfully published message to exchange", metadata: ["message": .string("\(value)")])
         }
     }
 
@@ -119,16 +127,23 @@ public struct MassTransit: Sendable {
         _ queueName: String,
         _ routingKey: String
     ) throws -> MassTransitWrapper<T>? {
-        logger.trace("Consumed buffer from \(queueName): \(String(buffer: buffer))")
+        let logger = logger.withMetadata([
+            "queueName": .string(queueName),
+            "routingKey": .string(routingKey),
+        ])
+
+        // Trace logging for buffer
+        buffer.logJsonAsTrace(using: logger)
 
         return withConsumeSpan(queueName, consumeKind, routingKey) { span in
             do {
                 let wrapper = try MassTransitWrapper(T.self, from: buffer)
-                logger.trace("Decoded buffer from \(queueName) to wrapper: \(wrapper)")
+                wrapper.logAsTrace(using: logger)
                 span.attributes.messaging.messageID = wrapper.messageId
                 return wrapper
             } catch {
-                logger.error("Error in message consumed from \(queueName): \(error)")
+                logger.error("Error decoding message consumed from queue", metadata: ["error": .string("\(error)")])
+                span.recordError(error)
 
                 // TODO: We should route this to an error queue
             }
@@ -164,16 +179,22 @@ public struct MassTransit: Sendable {
 
         // Determine message type
         let messageType = customMessageType ?? exchangeName
+        let logger = logger.withMetadata([
+            "messageType": .string(messageType),
+            "queueName": .string(queueName),
+            "exchangeName": .string(exchangeName),
+            "routingKey": .string(routingKey),
+        ])
 
         // Consume messages with span tracing
-        logger.debug("Consuming messages of type \(messageType) on queue \(queueName)...")
+        logger.debug("Starting consuming of messages from queue...")
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
 
         return .init(
             consumeStream.compactMap { buffer in
                 let wrapper = try processConsumeBuffer(buffer, as: T.self, .consume, queueName, routingKey)
                 if let wrapper {
-                    logger.trace("Consumed message \(wrapper.message) from queue \(queueName)")
+                    logger.trace("Consumed message from queue", metadata: ["message": .string("\(wrapper.message)")])
                 }
                 return wrapper?.message
             }
@@ -208,16 +229,22 @@ public struct MassTransit: Sendable {
 
         // Determine message type
         let messageType = customMessageType ?? exchangeName
+        let logger = logger.withMetadata([
+            "messageType": .string(messageType),
+            "queueName": .string(queueName),
+            "exchangeName": .string(exchangeName),
+            "routingKey": .string(routingKey),
+        ])
 
         // Consume messages with span tracing
-        logger.debug("Consuming messages of type \(messageType) on queue \(queueName)...")
+        logger.debug("Starting consuming of messages from queue...")
         let consumeStream = try await consumer.retryingConsumeBuffer(retryInterval: retryInterval)
 
         return .init(
             consumeStream.compactMap { buffer in
                 let wrapper = try processConsumeBuffer(buffer, as: T.self, .consume, queueName, routingKey)
                 if let wrapper {
-                    logger.trace("Consumed message \(wrapper.message) from queue \(queueName)")
+                    logger.trace("Consumed message from queue", metadata: ["message": .string("\(wrapper.message)")])
 
                     // Create ConsumeContext from message
                     return RequestContext(
