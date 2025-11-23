@@ -19,6 +19,7 @@ let package = Package(
         .package(url: "https://github.com/apple/swift-nio.git", from: "2.48.0"),
         .package(url: "https://github.com/apple/swift-distributed-tracing-extras.git", from: "1.0.0-beta.1"),
         .package(url: "https://github.com/apple/swift-argument-parser.git", from: "1.0.0"),
+        .package(url: "https://github.com/apple/swift-profile-recorder.git", .upToNextMinor(from: "0.3.0")),
     ],
     targets: [
         // Targets are the basic building blocks of a package, defining a module or a test suite.
@@ -42,6 +43,7 @@ let package = Package(
             dependencies: [
                 "MassTransit",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ProfileRecorderServer", package: "swift-profile-recorder"),
             ],
             path: "Sources/Examples/PublishConsume"
         ),
@@ -50,6 +52,7 @@ let package = Package(
             dependencies: [
                 "MassTransit",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ProfileRecorderServer", package: "swift-profile-recorder"),
             ],
             path: "Sources/Examples/RequestResponse"
         ),
@@ -58,6 +61,7 @@ let package = Package(
             dependencies: [
                 "MassTransit",
                 .product(name: "ArgumentParser", package: "swift-argument-parser"),
+                .product(name: "ProfileRecorderServer", package: "swift-profile-recorder"),
             ],
             path: "Sources/Examples/MultiMessageConsumer"
         ),

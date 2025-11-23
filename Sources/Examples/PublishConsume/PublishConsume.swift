@@ -3,6 +3,7 @@ import AsyncAlgorithms
 import Foundation
 import Logging
 import MassTransit
+import ProfileRecorderServer
 import RabbitMq
 
 @main
@@ -30,6 +31,9 @@ struct PublishConsume: AsyncParsableCommand {
 
     mutating func run() async throws {
         let logger = createLogger()
+
+        async let _ = ProfileRecorderServer(configuration: .parseFromEnvironment()).runIgnoringFailures(logger: logger)
+
         let rabbitMq = RetryingConnection(rabbitUrl, logger: logger)
         let massTransit = MassTransit(rabbitMq, logger: logger)
 
