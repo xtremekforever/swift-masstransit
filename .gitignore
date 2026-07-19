@@ -7,3 +7,7 @@ launch.json
 
 # Swiftly
 .swift-version
+
+*.perf
+*.data
+*.svg
